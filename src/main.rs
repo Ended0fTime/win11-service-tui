@@ -6,11 +6,14 @@ Make so all widgets render within the 3 main's block's inner() area and not dire
 
 mod windows_interface;
 mod handler;
+mod render_frame;
 use std::io::stdout;
 use std::rc::Rc;
 use crossterm::{event::{DisableMouseCapture, EnableMouseCapture}, execute, style::{Attribute::Reset, SetColors}};
 use ratatui::{
-    DefaultTerminal, Frame, buffer::Buffer, layout::{Alignment, Constraint, Direction::{self, Horizontal}, Layout, Rect}, style::{Color, Style, Stylize, palette::material::YELLOW}, symbols::border, text::{Line, Text}, widgets::{Block, BorderType::{self, Rounded, Thick}, List, Paragraph, Wrap, Widget},
+    DefaultTerminal, Frame, buffer::Buffer, layout::{Alignment, Constraint, Direction::{self, Horizontal}, Layout, Rect}, 
+    style::{Color, Style, Stylize, palette::material::YELLOW}, symbols::{border, scrollbar}, text::{Line, Text, Span}, 
+    widgets::{Block, Borders, Padding, BorderType::{self, Rounded, Thick}, List, Paragraph, Wrap, Scrollbar, ScrollbarOrientation, ScrollbarState, ListState},
 };
 use color_eyre::{
     Result, eyre::WrapErr,
@@ -31,9 +34,17 @@ fn main() -> Result<()> {
 #[derive(Debug, Default)]
 pub struct App {
     chunks_screen_cache: Vec<Rect>,
+    chunks_screen_inner_cache: Vec<Rect>,
     chunks_left_cache: Vec<Rc<[Rect]>>,
+
+    services_list_state: ListState,
+    services_count_vec: Vec<Line<'static>>,
+    services_scrollbar_index: usize,
+    services_scrollbar_state: ScrollbarState,
+
     mouse_pos: ButtonIdent,
     exit_clicked: bool,
+
     exit: bool,
 }
 
@@ -65,29 +76,75 @@ pub const LIGHT_YELLOW: Color = Color::Rgb(255, 255, 24);
 pub const LIGHT_BLUE: Color = Color::Rgb(25, 150, 255);
 pub const DARK_BLUE: Color = Color::Rgb(3, 12, 43);
 
+// Text contents Pre-defining
+const SERVICES_DESC: &[&str] = &[
+    /* Background Intelligent Transfer Service */ "Safe to disable (used for background file downloads like Windows updates).",
+    /* Connected User Experiences and Telemetry */ "Safe to disable (telemetry and diagnostic data collection).",
+    /* Delivery Optimization */ "Safe to disable (shares Windows updates with other PCs over the internet/LAN).",
+    /* Downloaded Maps Manager */ "Safe to disable unless you use the Windows Maps app offline.",
+    /* Geolocation Service */ "Not recommended if you use location-based apps, weather, or auto time zones.",
+    /* Microsoft Store Install Service */ "Do not disable if you use the Microsoft Store to install or update apps.",
+    /* Microsoft Usage and Quality Insights */ "Safe to disable (diagnostic telemetry and quality tracking).",
+    /* SysMain */ "Optional; safe to disable on SSDs (sometimes causes high RAM prefetching, previously Superfetch).",
+    /* Update Orchestrator Service */ "Not recommended (manages Windows Update restart schedules and workflows).",
+    /* Windows Health and Optimized Experiences */ "Safe to disable (monitors system health and telemetry reporting).",
+    /* Windows Modules Installer */ "Do not disable (required to install Windows updates and features, aka TrustedInstaller).",
+    /* Windows Update */ "Do not disable if you want your system to receive security patches and updates.",];
+
+const SERVICES:&[&str] = &[
+    "Background Intelligent Transfer Service", 
+    "Connected User Experiences and Telemetry",
+    "Delivery Optimization", 
+    "Downloaded Maps Manager",
+    "Geolocation Service",
+    "Microsoft Store Install Service",
+    "Microsoft Usage and Quality Insights",
+    "SysMain",
+    "Update Orchestrator Service",
+    "Windows Health and Optimized Experiences",
+    "Windows Modules Installer",
+    "Windows Update",
+];
+
+const SERVICES_SHORT:&[&str] = &[
+    "(BITS)",
+    "(DiagTrack)",
+    "(DoSvc)",
+    "(MapsBroker)",
+    "(lfsvc)",
+    "(InstallService)",
+    "(diagnosticshub.standardcollector.service)",
+    "(SysMain)",
+    "(UsoSvc)",
+    "(WERConSvc)",
+    "(TrustedInstaller)",
+    "(wuauserv)",
+];
+
 
 impl App {
-
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        self.init();
         while !self.exit {
             let size = terminal.size()?;
             let screen_area = Rect::new(0, 0, size.width, size.height);
-            self.calc_cache_layout(screen_area);                                                 // Calculate and cache layout
+            self.calc_cache_layout(screen_area);                              // Calculate and cache layout
             terminal.draw(|frame| self.render_frame(frame))?;   // rendering
-            self.handle_events().wrap_err("handle events failed")?;                             // event handling (inputs)
+            self.handle_events().wrap_err("handle events failed")?;           // event handling (inputs)
         }
         Ok(())
     }
 
-    fn render_frame(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
+    fn init(&mut self) {
+        self.services_list_state.select(Some(0));
     }
 
     fn exit(&mut self) {
         self.exit = true;
     }
 
+    // <#================== RENDER CALCULATIONS ==================#> //
     fn calc_cache_layout(&mut self, area: Rect) {
         // Main Area Layout
         let chunks_screen_horizontal = Layout::horizontal([
@@ -98,22 +155,38 @@ impl App {
             Constraint::Ratio(1, 3),
             Constraint::Fill(1),
         ]).split(chunks_screen_horizontal[1]);
-        let chunks_screen_side_vertical_lower = Layout::vertical([
+        let chunks_screen_side_vertical_upper = Layout::horizontal([
+            Constraint::Ratio(1, 20),
+            Constraint::Length(4),
+            Constraint::Fill(1),
             Constraint::Length(3),
+            Constraint::Length(2),
+        ]).split(chunks_screen_side_vertical[0]);
+        let chunks_screen_side_vertical_lower = Layout::vertical([
+            Constraint::Length(6),
             Constraint::Fill(1),
         ]).split(chunks_screen_side_vertical[1]);
-        self.chunks_screen_cache = vec![chunks_screen_horizontal[0]
-            , chunks_screen_side_vertical[0]
-            , chunks_screen_side_vertical[1]
-            , chunks_screen_side_vertical_lower[0]
-            , chunks_screen_side_vertical_lower[1]];
+        self.chunks_screen_cache = vec![
+            chunks_screen_horizontal[0], 
+            chunks_screen_side_vertical[0], 
+            chunks_screen_side_vertical[1]
+        ];
+        self.chunks_screen_inner_cache = vec![
+            Block::bordered().inner(chunks_screen_horizontal[0]), 
+            Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_screen_side_vertical_upper[1]), 
+            Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_screen_side_vertical_upper[2]), 
+            Block::bordered().borders(Borders::TOP | Borders::BOTTOM | Borders::RIGHT).inner(chunks_screen_side_vertical_upper[3]), 
+            Block::bordered().inner(chunks_screen_side_vertical_lower[0]), 
+            Block::bordered().inner(chunks_screen_side_vertical_lower[1])
+        ];
+
+        // Left Layout
         let chunks_left = Layout::vertical([
             Constraint::Fill(1),
             Constraint::Fill(1),
             Constraint::Fill(1),
             Constraint::Fill(1),
         ]).split(chunks_screen_horizontal[0]);
-
         // Left Layout Subdivision (To vertically center elements)
         self.chunks_left_cache.clear();
         let mut chunks_content:Vec<Rc<[Rect]>> = Vec::new();
@@ -135,62 +208,18 @@ impl App {
                 ]).split(chunks_content[i][j]));
             }
         }
+        
+        self.services_count_vec.clear();
+        for i in 1..=SERVICES.len() {
+            let line = vec![Line::from(vec![i.to_string().into(), ". ".into()]).alignment(Alignment::Right)];
+            self.services_count_vec.extend(line);
+        }
     }
 
     fn create_button(content: String, content_color:Color) -> Paragraph<'static>{
-        Paragraph::new(Line::from(vec![ 
-                content.fg(content_color).italic()])
-            .centered()).block(Block::bordered().border_style(Style::default().fg(LIGHT_BLUE)))
-    }
-}
-
-
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        // Outer frame
-        let title = Line::from(" Ferlex TUI ").fg(LIGHT_YELLOW).italic();
-        let block_left = Block::bordered().border_set(border::ROUNDED)
-            .border_style(Style::default().fg(LIGHT_BLUE))
-            .title(title);
-        let block_right_top = Block::bordered().border_set(border::ROUNDED)
-            .border_style(Style::default().fg(LIGHT_BLUE));
-        let block_right_btm = Block::bordered().border_set(border::ROUNDED)
-            .border_style(Style::default().fg(LIGHT_BLUE));
-
-        // Content declaration
-        let para_right = Paragraph::new(Line::from("Select badge of services to disable.")
-                .fg(Color::LightGreen).bold().italic().centered())
-            .wrap(Wrap {trim: true});
-        let mut content1 = App::create_button("Safe".to_string(), Color::White);
-        let mut content2 = App::create_button("Unsafe".to_string(), Color::White);
-        let mut content3 = App::create_button("Exit".to_string(), LIGHT_YELLOW);
-
-        let list_services = List::new(["1", "2"]);
-
-        // Color management based on events
-        match self.mouse_pos {
-            ButtonIdent::Button1(ButtonHighlight::Pressed(content_color)) => {
-                content1 = App::create_button("Safe".to_string(), content_color).bold();
-            }
-            ButtonIdent::Button2(ButtonHighlight::Pressed(content_color)) => {
-                content2 = App::create_button("Unsafe".to_string(), content_color).bold();
-            }
-            ButtonIdent::Exit(ButtonHighlight::Pressed(content_color)) => {
-                content3 = App::create_button("Exit".to_string(), content_color).bold();
-            }
-            _ => {}
-        }
-
-        // Rendering
-        block_left.render(self.chunks_screen_cache[0], buf);
-        block_right_top.render(self.chunks_screen_cache[1], buf);
-        block_right_btm.render(self.chunks_screen_cache[2], buf);
-
-        para_right.render(self.chunks_left_cache[0][1], buf);
-        content1.render(self.chunks_left_cache[2][1], buf);
-        content2.render(self.chunks_left_cache[5][1], buf);
-        content3.render(self.chunks_left_cache[8][1], buf);
-
-        list_services.render(self.chunks_screen_cache[1], buf);
+        Paragraph::new(
+            Line::from(vec![content.fg(content_color).italic()])
+            .centered()).block(Block::bordered().border_style(Style::default().fg(LIGHT_BLUE))
+        )
     }
 }

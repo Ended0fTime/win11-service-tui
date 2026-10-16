@@ -27,27 +27,41 @@ impl App{
 
     fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> Result<()> {
         match mouse_event.kind {
-            MouseEventKind::Down(MouseButton::Left) => 
+            // Button 
+            MouseEventKind::Down(MouseButton::Left) => {
                 if is_inside(self.chunks_left_cache[8][1], mouse_event.column, mouse_event.row) {
                     self.mouse_pos = ButtonIdent::Exit(ButtonHighlight::Pressed(LIGHT_BLUE));
                     self.exit_clicked = true;
                 }
                 else if is_inside(self.chunks_left_cache[2][1], mouse_event.column, mouse_event.row) {
-                    self.mouse_pos = ButtonIdent::Button1(ButtonHighlight::Pressed(LIGHT_BLUE));
+                    self.mouse_pos = ButtonIdent::Button1(ButtonHighlight::Pressed(Color::Green));
                 }
                 else if is_inside(self.chunks_left_cache[5][1], mouse_event.column, mouse_event.row) {
-                    self.mouse_pos = ButtonIdent::Button2(ButtonHighlight::Pressed(Color::Green));
-                },
+                    self.mouse_pos = ButtonIdent::Button2(ButtonHighlight::Pressed(Color::Red));
+                }
+            },
             MouseEventKind::Up(MouseButton::Left) => {
                 if !self.exit_clicked {
-                    self.mouse_pos = ButtonIdent::Button1(ButtonHighlight::NotPressed(LIGHT_YELLOW));
+                    self.mouse_pos = ButtonIdent::default();   // Default button case
                 }
                 else {
                     self.exit();
                 }     
             },
+            // List scroll
+            MouseEventKind::ScrollUp => {
+                self.services_scrollbar_index = self.services_scrollbar_index.saturating_sub(1);
+                self.services_list_state.select_previous();
+            },
+            MouseEventKind::ScrollDown => {
+                if !(self.services_scrollbar_index > 10) {
+                    self.services_scrollbar_index = self.services_scrollbar_index.saturating_add(1);
+                    self.services_list_state.select_next();
+                }
+            },
             _ => {}
         }
+
         Ok(())
     }
 
