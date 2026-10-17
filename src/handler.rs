@@ -1,4 +1,4 @@
-use crate::{App, ButtonHighlight, ButtonIdent, LIGHT_BLUE, LIGHT_YELLOW, DARK_BLUE};
+use crate::{App, ButtonHighlight, ButtonIdent, render_frame::{LIGHT_BLUE, LIGHT_YELLOW, DARK_BLUE}};
 use ratatui::{layout::Rect, style::Color};
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use color_eyre::eyre::{Context, Result}; // Or your Result type
@@ -19,7 +19,19 @@ impl App{
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<()> {
         match key_event.code {
-            KeyCode::Char('q') => self.exit(),                  //Exit term key event
+            KeyCode::Char('q') | KeyCode::Char('Q') => self.exit(),     //Exit term key event
+            KeyCode::Up => {
+                self.services_scrollbar_index = self.services_scrollbar_index.saturating_sub(1);
+                self.services_list_state.select_previous();
+            },
+            KeyCode::Down => {
+                if !(self.services_scrollbar_index > 10) {
+                    self.services_scrollbar_index = self.services_scrollbar_index.saturating_add(1);
+                    self.services_list_state.select_next();
+                }
+            },
+            KeyCode::Enter => self.disable_services(),
+
             _ => {}
         }
         Ok(())
@@ -29,11 +41,11 @@ impl App{
         match mouse_event.kind {
             // Button 
             MouseEventKind::Down(MouseButton::Left) => {
-                if is_inside(self.chunks_left_cache[8][1], mouse_event.column, mouse_event.row) {
-                    self.mouse_pos = ButtonIdent::Exit(ButtonHighlight::Pressed(LIGHT_BLUE));
-                    self.exit_clicked = true;
-                }
-                else if is_inside(self.chunks_left_cache[2][1], mouse_event.column, mouse_event.row) {
+                // if is_inside(self.chunks_left_cache[8][1], mouse_event.column, mouse_event.row) {
+                //     self.mouse_pos = ButtonIdent::Exit(ButtonHighlight::Pressed(LIGHT_BLUE));
+                //     self.exit_clicked = true;
+                // }
+                if is_inside(self.chunks_left_cache[2][1], mouse_event.column, mouse_event.row) {
                     self.mouse_pos = ButtonIdent::Button1(ButtonHighlight::Pressed(Color::Green));
                 }
                 else if is_inside(self.chunks_left_cache[5][1], mouse_event.column, mouse_event.row) {
@@ -59,11 +71,17 @@ impl App{
                     self.services_list_state.select_next();
                 }
             },
+            
             _ => {}
         }
 
         Ok(())
     }
+
+    fn exit(&mut self) {
+        self.exit = true;
+    }
+
 
 
 }
