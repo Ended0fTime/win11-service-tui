@@ -1,14 +1,7 @@
-/*  WIP
-Make so all widgets render within the 3 main's block's inner() area and not direclt on top of it
-*/
-
-
-
 mod handler;
 mod render_frame;
 use std::io::stdout;
-use std::rc::Rc;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::os::windows::process::CommandExt;
 use crossterm::{event::{DisableMouseCapture, EnableMouseCapture}, execute};
 use ratatui::{
@@ -36,17 +29,22 @@ fn main() -> Result<()> {
 pub struct App {
     chunks_screen_cache: Vec<Rect>,
     chunks_screen_inner_cache: Vec<Rect>,
-    chunks_left_cache: Vec<Rc<[Rect]>>,
+    chunks_left_cache: Vec<Rect>,
 
+    services_name_cache: Vec<String>,
+    services_name_short_cache: Vec<String>,
     services_list_state: ListState,
     services_count_num: Vec<Line<'static>>,
     services_scrollbar_index: usize,
     services_scrollbar_state: ScrollbarState,
 
-    cmd_output: String,
+    services_selected:Vec<String>,
+    services_code_selected:Vec<String>,
+
+    cmd_output_stop: String,
+    cmd_output_disable: String,
 
     mouse_pos: ButtonIdent,
-    exit_clicked: bool,
 
     exit: bool,
 }
@@ -86,44 +84,66 @@ const SERVICES:&[&str] = &[
     "Microsoft Usage and Quality Insights",
     "SysMain",
     "Update Orchestrator Service",
+    "Windows Insider Service",
     "Windows Health and Optimized Experiences",
     "Windows Modules Installer",
     "Windows Update",
 ];
 const SERVICES_SHORT:&[&str] = &[
-    "(BITS)",
-    "(DiagTrack)",
-    "(DoSvc)",
-    "(MapsBroker)",
-    "(lfsvc)",
-    "(InstallService)",
-    "(diagnosticshub.standardcollector.service)",
-    "(SysMain)",
-    "(UsoSvc)",
-    "(WERConSvc)",
-    "(TrustedInstaller)",
-    "(wuauserv)",
+    "BITS",
+    "DiagTrack",
+    "DoSvc",
+    "MapsBroker",
+    "lfsvc",
+    "InstallService",
+    "wuqisvc",
+    "SysMain",
+    "UsoSvc",
+    "wisvc",
+    "whesvc",
+    "TrustedInstaller",
+    "wuauserv",
 ];
 const SERVICES_DESC: &[&str] = &[
-    /* Background Intelligent Transfer Service */ "Safe to disable (used for background file downloads like Windows updates).",
-    /* Connected User Experiences and Telemetry */ "Safe to disable (telemetry and diagnostic data collection).",
-    /* Delivery Optimization */ "Safe to disable (shares Windows updates with other PCs over the internet/LAN).",
-    /* Downloaded Maps Manager */ "Safe to disable unless you use the Windows Maps app offline.",
-    /* Geolocation Service */ "Not recommended if you use location-based apps, weather, or auto time zones.",
-    /* Microsoft Store Install Service */ "Do not disable if you use the Microsoft Store to install or update apps.",
-    /* Microsoft Usage and Quality Insights */ "Safe to disable (diagnostic telemetry and quality tracking).",
-    /* SysMain */ "Optional; safe to disable on SSDs (sometimes causes high RAM prefetching, previously Superfetch).",
-    /* Update Orchestrator Service */ "Not recommended (manages Windows Update restart schedules and workflows).",
-    /* Windows Health and Optimized Experiences */ "Safe to disable (monitors system health and telemetry reporting).",
-    /* Windows Modules Installer */ "Do not disable (required to install Windows updates and features, aka TrustedInstaller).",
-    /* Windows Update */ "Do not disable if you want your system to receive security patches and updates.",
+    /* Background Intelligent Transfer Service */ "Used for background file downloads like Windows updates. *should be bundled together with Windows Update*",
+    /* Connected User Experiences and Telemetry */ "Telemetry and diagnostic data collection. (Privacy concern) *SAFE to disable*",
+    /* Delivery Optimization */ "Shares Windows updates with other PCs over the internet/LAN. (A waste of internet bandwidth) **CAN'T BE DISABLED DUE TO PERMISSION BUGS IN WIN 11",
+    /* Downloaded Maps Manager */ "Safe. unless you use the Windows Maps app offline. (Waste of storage space)",
+    /* Geolocation Service */ "Safe. Not recommended if you use location-based apps, weather, or auto time zones. (Privacy concern)",
+    /* Microsoft Store Install Service */ "Unsafe. Do not disable if you use the Microsoft Store to install or update apps.",
+    /* Microsoft Usage and Quality Insights */ "Safe to disable (diagnostic telemetry and quality tracking). (Privacy concern)",
+    /* SysMain */ "Optional; safe to disable on SSDs (sometimes causes high RAM prefetching, previously Superfetch). (Useless on modern SSDs)",
+    /* Update Orchestrator Service */ "Unsafe (manages Windows Update restart schedules and workflows). *should be bundled together with Windows Update*",
+    /* Windows Health and Optimized Experiences */ "Safe to disable (monitors system health and telemetry reporting). (Privacy concern)",
+    /* Windows Modules Installer */ "Unsafe (required to install Windows updates and features, aka TrustedInstaller). (should be bundled together with Windows Update)",
+    /* Windows Update */ "Unsafe. if you want your system to receive security patches and updates.",
 ];
+
+const SERVICES_SAFE:&[&str] = &[
+    "Connected User Experiences and Telemetry",
+    "Downloaded Maps Manager",
+    "Geolocation Service",
+    "Windows Insider Service",
+    "Microsoft Usage and Quality Insights",
+    "Windows Health and Optimized Experiences",
+];
+
+const SERVICES_SAFE_SHORT:&[&str] = &[
+    "DiagTrack",
+    "MapsBroker",
+    "lfsvc",
+    "wisvc",
+    "wuqisvc",
+    "whesvc",
+];
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;   // Windows API flag
 
 
 impl App {
     /// runs the application's main loop until the user quits
     fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
-        self.init();
+        self.init_values();
         while !self.exit {
             let size = terminal.size()?;
             let screen_area = Rect::new(0, 0, size.width, size.height);
@@ -134,18 +154,89 @@ impl App {
         Ok(())
     }
 
-    fn init(&mut self) {
+    fn init_values(&mut self) {
         self.services_list_state.select(Some(0));
+        self.services_name_cache = self.get_services_name();
+        self.services_name_short_cache = self.get_services_name_short();
+    }
+
+    fn get_services_name_short(&self) -> Vec<String> {
+        let mut services_name = Command::new("sc")
+            .args(["query", "state=all"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(Stdio::piped())
+            .spawn().unwrap();
+        let stdout = services_name.stdout.take().unwrap();
+        let output = Command::new("findstr")
+            .stdin(stdout)
+            .args(["SERVICE_NAME"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output().unwrap();
+        String::from_utf8_lossy(&output.stdout).into_owned().lines()
+        .map(|line| {line.replace("SERVICE_NAME:", "").trim().to_string()     
+        }).collect()
+    }
+
+    fn get_services_name(&self) -> Vec<String> {
+        let mut services_name = Command::new("sc")
+            .args(["query", "state=all"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(Stdio::piped())
+            .spawn().unwrap();
+        let stdout = services_name.stdout.take().unwrap();
+        let output = Command::new("findstr")
+            .stdin(stdout)
+            .args(["DISPLAY_NAME"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output().unwrap();
+        String::from_utf8_lossy(&output.stdout).into_owned().lines()
+        .map(|line| {line.replace("DISPLAY_NAME:", "").trim().to_string()     
+        }).collect()
+    }
+
+    fn get_services_desc(&self) -> Vec<String> {
+        todo!();
     }
 
     fn disable_services(&mut self) {
-        const CREATE_NO_WINDOW: u32 = 0x08000000; // Windows API flag
-        let output = Command::new("sc")
-            .arg("stop")
-            .arg("wuauserv")
-            .creation_flags(CREATE_NO_WINDOW)
-            .output().unwrap();
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        self.cmd_output = stdout.to_string();
+        self.cmd_output_stop.clear();    // clear for new message
+        let mut i = 0;
+        for code in &self.services_code_selected {
+            let output_stop = Command::new("sc")
+                .arg("stop")
+                .arg(code)
+                .creation_flags(CREATE_NO_WINDOW)
+                .output().unwrap();
+            let output_disable = Command::new("sc")
+                .arg("config")
+                .arg(code)
+                .arg("start=")
+                .arg("disabled")
+                .creation_flags(CREATE_NO_WINDOW)
+                .output().unwrap();
+            
+            let stdout = String::from_utf8_lossy(&output_stop.stdout);
+            if stdout.contains("FAILED") && !stdout.contains("1062") {
+                self.cmd_output_stop.push_str(&format!(" Please relaunch the program with administrator rights. Access denied at Index {}: {}", i, &self.services_selected[i]));
+                break;
+            }
+            else {
+                self.cmd_output_stop = String::from("Stopped all running services");
+            }
+
+            let stdout_disable = String::from_utf8_lossy(&output_disable.stdout);
+            self.cmd_output_disable.push_str(&stdout_disable.to_string());
+            if stdout_disable.contains("FAILED") {
+                self.cmd_output_disable.push_str(&format!(" Please relaunch the program with administrator rights. Access denied at Index {}: {}", i, &self.services_selected[i]));
+                break;
+            }
+            else {
+                self.cmd_output_disable.clear();
+                self.cmd_output_disable = String::from(" Successfully disabled selected services.");
+            }
+            i = i + 1;
+        }
     }
+
+
 }

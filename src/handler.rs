@@ -1,4 +1,4 @@
-use crate::{App, ButtonHighlight, ButtonIdent, render_frame::{LIGHT_BLUE, LIGHT_YELLOW, DARK_BLUE}};
+use crate::{App, ButtonHighlight, ButtonIdent, SERVICES_SAFE, SERVICES_SAFE_SHORT, SERVICES, SERVICES_SHORT, render_frame::{DARK_BLUE, LIGHT_BLUE, LIGHT_YELLOW}};
 use ratatui::{layout::Rect, style::Color};
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use color_eyre::eyre::{Context, Result}; // Or your Result type
@@ -19,18 +19,32 @@ impl App{
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<()> {
         match key_event.code {
-            KeyCode::Char('q') | KeyCode::Char('Q') => self.exit(),     //Exit term key event
-            KeyCode::Up => {
+            KeyCode::Char('q') | KeyCode::Char('Q') => 
+                self.exit(),     //Exit term key event
+            KeyCode::Up | KeyCode::Char('w') => {
                 self.services_scrollbar_index = self.services_scrollbar_index.saturating_sub(1);
                 self.services_list_state.select_previous();
             },
-            KeyCode::Down => {
-                if !(self.services_scrollbar_index > 10) {
+            KeyCode::Down | KeyCode::Char('s') => {
+                if self.services_scrollbar_index < self.services_count_num.len() - 1 {
                     self.services_scrollbar_index = self.services_scrollbar_index.saturating_add(1);
                     self.services_list_state.select_next();
                 }
             },
-            KeyCode::Enter => self.disable_services(),
+            KeyCode::Char('e') | KeyCode::Char('E') => {
+                let selection = &SERVICES[self.services_scrollbar_index].to_string();
+                if !self.check_services_dupe(selection) {
+                    self.services_selected.push((SERVICES[self.services_scrollbar_index]).to_string());
+                    self.services_code_selected.push((SERVICES_SHORT[self.services_scrollbar_index]).to_string());
+                }
+            },
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                self.services_selected.pop();
+                self.services_code_selected.pop();
+            },
+            KeyCode::Enter => {
+                self.disable_services();
+            },
 
             _ => {}
         }
@@ -41,24 +55,23 @@ impl App{
         match mouse_event.kind {
             // Button 
             MouseEventKind::Down(MouseButton::Left) => {
-                // if is_inside(self.chunks_left_cache[8][1], mouse_event.column, mouse_event.row) {
-                //     self.mouse_pos = ButtonIdent::Exit(ButtonHighlight::Pressed(LIGHT_BLUE));
-                //     self.exit_clicked = true;
-                // }
-                if is_inside(self.chunks_left_cache[2][1], mouse_event.column, mouse_event.row) {
+                if is_inside(self.chunks_left_cache[1], mouse_event.column, mouse_event.row) {
                     self.mouse_pos = ButtonIdent::Button1(ButtonHighlight::Pressed(Color::Green));
+                    if self.services_selected.is_empty() {
+                        self.services_selected.extend(SERVICES_SAFE.iter().map(|x| x.to_string()));
+                        self.services_code_selected.extend(SERVICES_SAFE_SHORT.iter().map(|x| x.to_string()));
+                    }
                 }
-                else if is_inside(self.chunks_left_cache[5][1], mouse_event.column, mouse_event.row) {
+                else if is_inside(self.chunks_left_cache[2], mouse_event.column, mouse_event.row) {
                     self.mouse_pos = ButtonIdent::Button2(ButtonHighlight::Pressed(Color::Red));
+                    if !self.services_selected.is_empty() {
+                        self.services_selected.clear();
+                        self.services_code_selected.clear();
+                    }
                 }
             },
             MouseEventKind::Up(MouseButton::Left) => {
-                if !self.exit_clicked {
-                    self.mouse_pos = ButtonIdent::default();   // Default button case
-                }
-                else {
-                    self.exit();
-                }     
+                self.mouse_pos = ButtonIdent::default();   // Default button case
             },
             // List scroll
             MouseEventKind::ScrollUp => {
@@ -66,7 +79,7 @@ impl App{
                 self.services_list_state.select_previous();
             },
             MouseEventKind::ScrollDown => {
-                if !(self.services_scrollbar_index > 10) {
+                if !(self.services_scrollbar_index > self.services_count_num.len() - 1) {
                     self.services_scrollbar_index = self.services_scrollbar_index.saturating_add(1);
                     self.services_list_state.select_next();
                 }
@@ -78,12 +91,13 @@ impl App{
         Ok(())
     }
 
+    fn check_services_dupe (&self, selection: &String) -> bool {
+        self.services_selected.contains(selection)
+    }
+
     fn exit(&mut self) {
         self.exit = true;
     }
-
-
-
 }
 
 
