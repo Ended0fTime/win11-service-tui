@@ -1,8 +1,15 @@
 mod handler;
 mod render_frame;
+mod services;
+
 use std::io::stdout;
+
+use windows_service::{
+    service::{Service, ServiceAccess, ServiceStartType, ServiceState}, service_manager::{ServiceManager, ServiceManagerAccess},
+};
 use std::process::{Command, Stdio};
 use std::os::windows::process::CommandExt;
+
 use crossterm::{event::{DisableMouseCapture, EnableMouseCapture}, execute};
 use ratatui::{
     DefaultTerminal, layout::{Rect}, 
@@ -33,13 +40,17 @@ pub struct App {
 
     services_name_cache: Vec<String>,
     services_name_short_cache: Vec<String>,
+    services_desc_cache: Vec<String>,
+
     services_list_state: ListState,
     services_count_num: Vec<Line<'static>>,
     services_scrollbar_index: usize,
     services_scrollbar_state: ScrollbarState,
 
-    services_selected:Vec<String>,
-    services_code_selected:Vec<String>,
+    services_selected: Vec<String>,
+    services_code_selected: Vec<String>,
+
+    search_toggle: bool,
 
     cmd_output_stop: String,
     cmd_output_disable: String,
@@ -137,8 +148,6 @@ const SERVICES_SAFE_SHORT:&[&str] = &[
     "whesvc",
 ];
 
-const CREATE_NO_WINDOW: u32 = 0x08000000;   // Windows API flag
-
 
 impl App {
     /// runs the application's main loop until the user quits
@@ -158,85 +167,7 @@ impl App {
         self.services_list_state.select(Some(0));
         self.services_name_cache = self.get_services_name();
         self.services_name_short_cache = self.get_services_name_short();
+        self.services_desc_cache = self.get_services_desc();
     }
-
-    fn get_services_name_short(&self) -> Vec<String> {
-        let mut services_name = Command::new("sc")
-            .args(["query", "state=all"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .stdout(Stdio::piped())
-            .spawn().unwrap();
-        let stdout = services_name.stdout.take().unwrap();
-        let output = Command::new("findstr")
-            .stdin(stdout)
-            .args(["SERVICE_NAME"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output().unwrap();
-        String::from_utf8_lossy(&output.stdout).into_owned().lines()
-        .map(|line| {line.replace("SERVICE_NAME:", "").trim().to_string()     
-        }).collect()
-    }
-
-    fn get_services_name(&self) -> Vec<String> {
-        let mut services_name = Command::new("sc")
-            .args(["query", "state=all"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .stdout(Stdio::piped())
-            .spawn().unwrap();
-        let stdout = services_name.stdout.take().unwrap();
-        let output = Command::new("findstr")
-            .stdin(stdout)
-            .args(["DISPLAY_NAME"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output().unwrap();
-        String::from_utf8_lossy(&output.stdout).into_owned().lines()
-        .map(|line| {line.replace("DISPLAY_NAME:", "").trim().to_string()     
-        }).collect()
-    }
-
-    fn get_services_desc(&self) -> Vec<String> {
-        todo!();
-    }
-
-    fn disable_services(&mut self) {
-        self.cmd_output_stop.clear();    // clear for new message
-        let mut i = 0;
-        for code in &self.services_code_selected {
-            let output_stop = Command::new("sc")
-                .arg("stop")
-                .arg(code)
-                .creation_flags(CREATE_NO_WINDOW)
-                .output().unwrap();
-            let output_disable = Command::new("sc")
-                .arg("config")
-                .arg(code)
-                .arg("start=")
-                .arg("disabled")
-                .creation_flags(CREATE_NO_WINDOW)
-                .output().unwrap();
-            
-            let stdout = String::from_utf8_lossy(&output_stop.stdout);
-            if stdout.contains("FAILED") && !stdout.contains("1062") {
-                self.cmd_output_stop.push_str(&format!(" Please relaunch the program with administrator rights. Access denied at Index {}: {}", i, &self.services_selected[i]));
-                break;
-            }
-            else {
-                self.cmd_output_stop = String::from("Stopped all running services");
-            }
-
-            let stdout_disable = String::from_utf8_lossy(&output_disable.stdout);
-            self.cmd_output_disable.push_str(&stdout_disable.to_string());
-            if stdout_disable.contains("FAILED") {
-                self.cmd_output_disable.push_str(&format!(" Please relaunch the program with administrator rights. Access denied at Index {}: {}", i, &self.services_selected[i]));
-                break;
-            }
-            else {
-                self.cmd_output_disable.clear();
-                self.cmd_output_disable = String::from(" Successfully disabled selected services.");
-            }
-            i = i + 1;
-        }
-    }
-
 
 }

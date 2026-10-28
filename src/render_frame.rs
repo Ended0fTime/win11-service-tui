@@ -1,4 +1,4 @@
-use crate::{App, ButtonHighlight, ButtonIdent, SERVICES, SERVICES_DESC, SERVICES_SHORT};
+use crate::{App, ButtonHighlight, ButtonIdent};
 use ratatui::{
     Frame, buffer::Buffer, layout::{Alignment, Constraint, Spacing, Direction::{self, Horizontal}, Layout, Rect}, 
     style::{Color, Style, Stylize}, symbols::{border, scrollbar, merge::MergeStrategy}, text::{Line, Text, Span}, 
@@ -35,7 +35,7 @@ impl App {
             Constraint::Ratio(1, 3),
         ]).spacing(Spacing::Overlap(1)).split(area);
         let chunks_screen_side_vertical = Layout::vertical([
-            Constraint::Ratio(1, 3),
+            Constraint::Ratio(1, 2),
             Constraint::Fill(1),
         ]).spacing(Spacing::Overlap(1)).split(chunks_screen_horizontal[0]);
 
@@ -122,6 +122,21 @@ impl App {
         frame.render_widget(too_small_para, main_layout[1]);
     }
 
+    fn render_search(&mut self, frame: &mut Frame) {
+        todo!();
+        let screen_area = frame.area();
+        let main_layout = Layout::vertical([
+            Constraint::Fill(1),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+        ]).split(screen_area);
+
+        let searchbar = Paragraph::new("terminal is too small. Please enlarge")
+            .fg(LIGHT_YELLOW)
+            .bold()
+            .centered();
+        frame.render_widget(searchbar, main_layout[1]);
+    }
 
     fn render_main(&mut self, frame: &mut Frame) {
         // Outer frames
@@ -144,8 +159,8 @@ impl App {
 
         // Content declaration
         let raw_output_serv_title: Vec<String> = self.services_name_cache.clone();
-
         let raw_output_serv_short: Vec<String> = self.services_name_short_cache.clone();
+        let raw_output_serv_desc: Vec<String> = self.services_desc_cache.clone();
 
         let list_services = List::new(raw_output_serv_title.clone())
             .block(Block::new()
@@ -164,7 +179,8 @@ impl App {
 
         let serv_title = raw_output_serv_title.get(self.services_scrollbar_index).unwrap();
         let serv_title_short = raw_output_serv_short.get(self.services_scrollbar_index).unwrap();
-        let serv_desc = self.services_scrollbar_index.to_string(); //TODO
+        let default_error = String::from("Default");
+        let serv_desc = raw_output_serv_desc.get(self.services_scrollbar_index).unwrap_or(&default_error);
         // let serv_desc = SERVICES_DESC.get(self.services_scrollbar_index).unwrap_or(&"Default");
 
         let para_details_title = Paragraph::new(vec![Line::from(

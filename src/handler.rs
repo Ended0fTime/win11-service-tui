@@ -4,7 +4,7 @@ use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent,
 use color_eyre::eyre::{Context, Result}; // Or your Result type
 
 impl App{ 
-    /// Input Handling
+    // Input Handling
     pub fn handle_events(&mut self) -> Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => 
@@ -19,14 +19,15 @@ impl App{
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<()> {
         match key_event.code {
-            KeyCode::Char('q') | KeyCode::Char('Q') => 
-                self.exit(),     //Exit term key event
+            KeyCode::Char('q') | KeyCode::Char('Q') => {
+                self.exit()
+            },
             KeyCode::Up | KeyCode::Char('w') => {
                 self.services_scrollbar_index = self.services_scrollbar_index.saturating_sub(1);
                 self.services_list_state.select_previous();
             },
             KeyCode::Down | KeyCode::Char('s') => {
-                if self.services_scrollbar_index < self.services_count_num.len() - 1 {
+                if self.check_scrollbar_within_bounds() {
                     self.services_scrollbar_index = self.services_scrollbar_index.saturating_add(1);
                     self.services_list_state.select_next();
                 }
@@ -34,14 +35,17 @@ impl App{
             KeyCode::Char('e') | KeyCode::Char('E') => {
                 let selection = &SERVICES[self.services_scrollbar_index].to_string();
                 if !self.check_services_dupe(selection) {
-                    self.services_selected.push((SERVICES[self.services_scrollbar_index]).to_string());
-                    self.services_code_selected.push((SERVICES_SHORT[self.services_scrollbar_index]).to_string());
+                    self.services_selected.push((self.services_name_cache[self.services_scrollbar_index]).to_string());
+                    self.services_code_selected.push((self.services_name_short_cache[self.services_scrollbar_index]).to_string());
                 }
             },
             KeyCode::Char('r') | KeyCode::Char('R') => {
                 self.services_selected.pop();
                 self.services_code_selected.pop();
             },
+            KeyCode::Char('f') | KeyCode::Char('F') => {
+                self.search_toggle = true;
+            }
             KeyCode::Enter => {
                 self.disable_services();
             },
@@ -79,7 +83,7 @@ impl App{
                 self.services_list_state.select_previous();
             },
             MouseEventKind::ScrollDown => {
-                if !(self.services_scrollbar_index > self.services_count_num.len() - 1) {
+                if self.check_scrollbar_within_bounds() {
                     self.services_scrollbar_index = self.services_scrollbar_index.saturating_add(1);
                     self.services_list_state.select_next();
                 }
@@ -93,6 +97,10 @@ impl App{
 
     fn check_services_dupe (&self, selection: &String) -> bool {
         self.services_selected.contains(selection)
+    }
+
+    fn check_scrollbar_within_bounds (&self) -> bool {
+        self.services_scrollbar_index < self.services_count_num.len() - 1
     }
 
     fn exit(&mut self) {
