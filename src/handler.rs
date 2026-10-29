@@ -1,4 +1,4 @@
-use crate::{App, ButtonHighlight, ButtonIdent, SERVICES_SAFE, SERVICES_SAFE_SHORT, SERVICES, SERVICES_SHORT, render_frame::{DARK_BLUE, LIGHT_BLUE, LIGHT_YELLOW}};
+use crate::{App, ButtonHighlight, ButtonIdent, SERVICES_SAFE, SERVICES_SAFE_SHORT, render_frame::{DARK_BLUE, LIGHT_BLUE, LIGHT_YELLOW}};
 use ratatui::{layout::Rect, style::Color};
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use color_eyre::eyre::{Context, Result}; // Or your Result type
@@ -33,7 +33,7 @@ impl App{
                 }
             },
             KeyCode::Char('e') | KeyCode::Char('E') => {
-                let selection = &SERVICES[self.services_scrollbar_index].to_string();
+                let selection = &self.services_name_cache[self.services_scrollbar_index].to_string();
                 if !self.check_services_dupe(selection) {
                     self.services_selected.push((self.services_name_cache[self.services_scrollbar_index]).to_string());
                     self.services_code_selected.push((self.services_name_short_cache[self.services_scrollbar_index]).to_string());
@@ -45,9 +45,14 @@ impl App{
             },
             KeyCode::Char('f') | KeyCode::Char('F') => {
                 self.search_toggle = true;
-            }
+            },
             KeyCode::Enter => {
-                self.disable_services();
+                if self.search_toggle {
+                    self.search_toggle = false;
+                }
+                else {
+                    self.disable_services();
+                }
             },
 
             _ => {}
@@ -59,14 +64,14 @@ impl App{
         match mouse_event.kind {
             // Button 
             MouseEventKind::Down(MouseButton::Left) => {
-                if is_inside(self.chunks_left_cache[1], mouse_event.column, mouse_event.row) {
+                if is_inside(self.layout.chunks_right[1], mouse_event.column, mouse_event.row) {
                     self.mouse_pos = ButtonIdent::Button1(ButtonHighlight::Pressed(Color::Green));
                     if self.services_selected.is_empty() {
                         self.services_selected.extend(SERVICES_SAFE.iter().map(|x| x.to_string()));
                         self.services_code_selected.extend(SERVICES_SAFE_SHORT.iter().map(|x| x.to_string()));
                     }
                 }
-                else if is_inside(self.chunks_left_cache[2], mouse_event.column, mouse_event.row) {
+                else if is_inside(self.layout.chunks_right[2], mouse_event.column, mouse_event.row) {
                     self.mouse_pos = ButtonIdent::Button2(ButtonHighlight::Pressed(Color::Red));
                     if !self.services_selected.is_empty() {
                         self.services_selected.clear();

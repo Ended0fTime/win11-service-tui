@@ -4,12 +4,6 @@ mod services;
 
 use std::io::stdout;
 
-use windows_service::{
-    service::{Service, ServiceAccess, ServiceStartType, ServiceState}, service_manager::{ServiceManager, ServiceManagerAccess},
-};
-use std::process::{Command, Stdio};
-use std::os::windows::process::CommandExt;
-
 use crossterm::{event::{DisableMouseCapture, EnableMouseCapture}, execute};
 use ratatui::{
     DefaultTerminal, layout::{Rect}, 
@@ -34,9 +28,7 @@ fn main() -> Result<()> {
 
 #[derive(Debug, Default)]
 pub struct App {
-    chunks_screen_cache: Vec<Rect>,
-    chunks_screen_inner_cache: Vec<Rect>,
-    chunks_left_cache: Vec<Rect>,
+    layout: LayoutCache,
 
     services_name_cache: Vec<String>,
     services_name_short_cache: Vec<String>,
@@ -58,6 +50,15 @@ pub struct App {
     mouse_pos: ButtonIdent,
 
     exit: bool,
+}
+
+#[derive(Debug, Default)]
+pub struct LayoutCache {
+    screen_size:Rect,
+    chunks_screen: Vec<Rect>,
+    chunks_screen_inner: Vec<Rect>,
+    chunks_right: Vec<Rect>,
+    chunks_search: Vec<Rect>
 }
 
 #[derive(Debug)]
@@ -85,51 +86,6 @@ impl Default for ButtonIdent {
 
 
 // Text contents Pre-defining
-const SERVICES:&[&str] = &[
-    "Background Intelligent Transfer Service", 
-    "Connected User Experiences and Telemetry",
-    "Delivery Optimization", 
-    "Downloaded Maps Manager",
-    "Geolocation Service",
-    "Microsoft Store Install Service",
-    "Microsoft Usage and Quality Insights",
-    "SysMain",
-    "Update Orchestrator Service",
-    "Windows Insider Service",
-    "Windows Health and Optimized Experiences",
-    "Windows Modules Installer",
-    "Windows Update",
-];
-const SERVICES_SHORT:&[&str] = &[
-    "BITS",
-    "DiagTrack",
-    "DoSvc",
-    "MapsBroker",
-    "lfsvc",
-    "InstallService",
-    "wuqisvc",
-    "SysMain",
-    "UsoSvc",
-    "wisvc",
-    "whesvc",
-    "TrustedInstaller",
-    "wuauserv",
-];
-const SERVICES_DESC: &[&str] = &[
-    /* Background Intelligent Transfer Service */ "Used for background file downloads like Windows updates. *should be bundled together with Windows Update*",
-    /* Connected User Experiences and Telemetry */ "Telemetry and diagnostic data collection. (Privacy concern) *SAFE to disable*",
-    /* Delivery Optimization */ "Shares Windows updates with other PCs over the internet/LAN. (A waste of internet bandwidth) **CAN'T BE DISABLED DUE TO PERMISSION BUGS IN WIN 11",
-    /* Downloaded Maps Manager */ "Safe. unless you use the Windows Maps app offline. (Waste of storage space)",
-    /* Geolocation Service */ "Safe. Not recommended if you use location-based apps, weather, or auto time zones. (Privacy concern)",
-    /* Microsoft Store Install Service */ "Unsafe. Do not disable if you use the Microsoft Store to install or update apps.",
-    /* Microsoft Usage and Quality Insights */ "Safe to disable (diagnostic telemetry and quality tracking). (Privacy concern)",
-    /* SysMain */ "Optional; safe to disable on SSDs (sometimes causes high RAM prefetching, previously Superfetch). (Useless on modern SSDs)",
-    /* Update Orchestrator Service */ "Unsafe (manages Windows Update restart schedules and workflows). *should be bundled together with Windows Update*",
-    /* Windows Health and Optimized Experiences */ "Safe to disable (monitors system health and telemetry reporting). (Privacy concern)",
-    /* Windows Modules Installer */ "Unsafe (required to install Windows updates and features, aka TrustedInstaller). (should be bundled together with Windows Update)",
-    /* Windows Update */ "Unsafe. if you want your system to receive security patches and updates.",
-];
-
 const SERVICES_SAFE:&[&str] = &[
     "Connected User Experiences and Telemetry",
     "Downloaded Maps Manager",
@@ -154,9 +110,8 @@ impl App {
     fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         self.init_values();
         while !self.exit {
-            let size = terminal.size()?;
-            let screen_area = Rect::new(0, 0, size.width, size.height);
-            self.calc_cache_layout(screen_area);                              // Calculate and cache layout
+            let screen_area = get_term_size(terminal);
+            self.cache_layout(screen_area);                              // Calculate and cache layout
             terminal.draw(|frame| self.render_frame(frame))?;   // rendering
             self.handle_events().wrap_err("handle events failed")?;           // event handling (inputs)
         }
@@ -165,9 +120,14 @@ impl App {
 
     fn init_values(&mut self) {
         self.services_list_state.select(Some(0));
-        self.services_name_cache = self.get_services_name();
-        self.services_name_short_cache = self.get_services_name_short();
-        self.services_desc_cache = self.get_services_desc();
+        self.services_name_cache = services::get_services_name();
+        self.services_name_short_cache = services::get_services_name_short();
+        self.services_desc_cache = services::get_services_desc();
+        self.services_count_num = render_frame::cache_service_numbering(self.services_name_short_cache.len());
     }
+}
 
+fn get_term_size(terminal: &mut DefaultTerminal) -> Rect {
+    let size = terminal.size().expect("FATAL: get terminal size failed:");
+    Rect::new(0, 0, size.width, size.height)
 }

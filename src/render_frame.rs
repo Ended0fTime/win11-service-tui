@@ -1,8 +1,12 @@
 use crate::{App, ButtonHighlight, ButtonIdent};
 use ratatui::{
-    Frame, buffer::Buffer, layout::{Alignment, Constraint, Spacing, Direction::{self, Horizontal}, Layout, Rect}, 
-    style::{Color, Style, Stylize}, symbols::{border, scrollbar, merge::MergeStrategy}, text::{Line, Text, Span}, 
-    widgets::{Block, Borders, Padding, BorderType::{self, Rounded, Thick}, List, Paragraph, Wrap, Scrollbar, ScrollbarOrientation, ScrollbarState, ListState},
+    Frame, 
+    layout::{Alignment, Constraint, Spacing, Layout, Rect}, 
+    style::{Color, Style, Stylize}, 
+    symbols::{border, scrollbar, merge::MergeStrategy}, text::{Line, Text, Span}, 
+    widgets::{Block, Borders, Padding, 
+        BorderType::{self, Rounded, Thick}, 
+        List, Paragraph, Wrap, Scrollbar, ScrollbarOrientation},
 };
 
 
@@ -16,97 +20,48 @@ const SCREEN_WIDTH_MIN:u16 = 20;
 const SCREEN_HEIGHT_MIN:u16 = 15;
 
 impl App {    
+    pub fn cache_layout(&mut self, area: Rect) {        
+        let chunks_main = calc_layout_main_horizontal(area);
+        let chunks_left = calc_layout_main_vertical(chunks_main[0]);
+        let chunks_left_upper = calc_layout_left_upper(chunks_left[0]);
+        let chunks_left_lower = calc_layout_left_lower(chunks_left[1]);
+        let chunks_right = calc_layout_right(chunks_main[1]);
+
+        self.layout.screen_size = area;     // Entire screen area size
+        self.layout.chunks_screen = vec![
+            chunks_main[1], 
+            chunks_left[0], 
+            chunks_left[1]
+        ];
+        self.layout.chunks_screen_inner = vec![
+            Block::bordered().inner(chunks_main[1]), 
+            Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_left_upper[1]), 
+            Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_left_upper[2]), 
+            Block::bordered().borders(Borders::TOP | Borders::BOTTOM | Borders::RIGHT).inner(chunks_left_upper[3]), 
+            Block::bordered().inner(chunks_left_lower[0]), 
+            Block::bordered().inner(chunks_left_lower[1]),
+            Block::bordered().inner(chunks_left_lower[2]),
+        ];
+        self.layout.chunks_right = chunks_right;
+    }
+
+
     pub fn render_frame(&mut self, frame: &mut Frame) {
-        let screen_width_check:bool = self.chunks_screen_inner_cache[0].width < SCREEN_WIDTH_MIN;
-        let screen_height_check:bool = self.chunks_screen_inner_cache[0].height < SCREEN_HEIGHT_MIN;
+        let screen_width_check:bool = self.layout.chunks_screen_inner[0].width < SCREEN_WIDTH_MIN;
+        let screen_height_check:bool = self.layout.chunks_screen_inner[0].height < SCREEN_HEIGHT_MIN;
         if screen_width_check || screen_height_check {
             self.render_too_small(frame);
         }
         else {
             self.render_main(frame);
+            if self.search_toggle {
+                self.render_search(frame);
+            }
         }
     }
-
-
-    pub fn calc_cache_layout(&mut self, area: Rect) {
-        // Main Area Layout
-        let chunks_screen_horizontal = Layout::horizontal([
-            Constraint::Fill(1),
-            Constraint::Ratio(1, 3),
-        ]).spacing(Spacing::Overlap(1)).split(area);
-        let chunks_screen_side_vertical = Layout::vertical([
-            Constraint::Ratio(1, 2),
-            Constraint::Fill(1),
-        ]).spacing(Spacing::Overlap(1)).split(chunks_screen_horizontal[0]);
-
-        //Right Layout
-        let chunks_screen_side_vertical_upper = Layout::horizontal([
-            Constraint::Ratio(1, 20),
-            Constraint::Length(5),
-            Constraint::Fill(1),
-            Constraint::Length(3),
-            Constraint::Length(2),
-        ]).split(chunks_screen_side_vertical[0]);
-        
-        let chunks_screen_side_vertical_lower = Layout::vertical([
-            Constraint::Length(5),
-            Constraint::Fill(1),
-            Constraint::Fill(1),
-        ]).split(chunks_screen_side_vertical[1]);
-        
-        self.chunks_screen_cache = vec![
-            chunks_screen_horizontal[1], 
-            chunks_screen_side_vertical[0], 
-            chunks_screen_side_vertical[1]
-        ];
-        self.chunks_screen_inner_cache = vec![
-            Block::bordered().inner(chunks_screen_horizontal[1]), 
-            Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_screen_side_vertical_upper[1]), 
-            Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_screen_side_vertical_upper[2]), 
-            Block::bordered().borders(Borders::TOP | Borders::BOTTOM | Borders::RIGHT).inner(chunks_screen_side_vertical_upper[3]), 
-            Block::bordered().inner(chunks_screen_side_vertical_lower[0]), 
-            Block::bordered().inner(chunks_screen_side_vertical_lower[1]),
-            Block::bordered().inner(chunks_screen_side_vertical_lower[2]),
-        ];
-
-        // Left Layout
-        let chunks_left = Layout::vertical([
-            Constraint::Length(8),
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(4),
-            Constraint::Fill(1),
-        ]).split(self.chunks_screen_inner_cache[0]);
-        // Further subdivision to horizontally narrow down elements
-        let mut chunks_button = Vec::new();
-        for i in 1..=2 {
-            chunks_button.push(Layout::horizontal([
-                Constraint::Ratio(1,5),
-                Constraint::Fill(1),
-                Constraint::Ratio(1,5),
-            ]).split(chunks_left[i]));
-        }
-        self.chunks_left_cache = vec![
-            chunks_left[0], 
-            chunks_button[0][1], 
-            chunks_button[1][1], 
-            chunks_left[3], 
-            chunks_left[4]
-        ];
-        
-        //List services count caching
-        self.services_count_num.clear();
-        //TEMP TEST
-        let raw_output_serv_title: Vec<String> = self.services_name_cache.clone();
-        for i in 1..=raw_output_serv_title.len() {
-            let line = vec![Line::from(vec![i.to_string().into(), ". ".into()]).alignment(Alignment::Right)];
-            self.services_count_num.extend(line);
-        }
-    }
-
 
     fn render_too_small(&mut self, frame: &mut Frame) {
-        let screen_area = frame.area();
+        let screen_area = self.layout.screen_size;
         let main_layout = Layout::vertical([
             Constraint::Fill(1),
             Constraint::Length(1),
@@ -123,44 +78,53 @@ impl App {
     }
 
     fn render_search(&mut self, frame: &mut Frame) {
-        todo!();
-        let screen_area = frame.area();
-        let main_layout = Layout::vertical([
+        let screen_area = self.layout.screen_size;
+        let vertical_layout = Layout::vertical([
+            Constraint::Ratio(1, 20),
+            Constraint::Length(3),
             Constraint::Fill(1),
-            Constraint::Length(1),
-            Constraint::Fill(1),
+            Constraint::Ratio(1, 20),
         ]).split(screen_area);
+        let mut horizontal_layout = Vec::with_capacity(4);
+        for i in 1..vertical_layout.len() {
+            horizontal_layout.push(Layout::horizontal([
+                Constraint::Ratio(1, 10),
+                Constraint::Fill(1),
+                Constraint::Ratio(1, 10),
+            ]).split(vertical_layout[i]).to_vec());
+        }
 
-        let searchbar = Paragraph::new("terminal is too small. Please enlarge")
-            .fg(LIGHT_YELLOW)
-            .bold()
-            .centered();
-        frame.render_widget(searchbar, main_layout[1]);
+        let black_block = Block::new().bg(Color::Black);
+        let too_small_para = Paragraph::new("terminal is too small. Please enlarge")
+            .fg(LIGHT_YELLOW).bold().centered()
+            .block(Block::bordered().border_style(Style::default().fg(LIGHT_YELLOW)));
+        frame.render_widget(black_block, screen_area);
+        frame.render_widget(too_small_para, vertical_layout[1]);
     }
 
     fn render_main(&mut self, frame: &mut Frame) {
         // Outer frames
         let title = Line::from(" Win11 Service Disabler ").fg(LIGHT_YELLOW).italic();
-        let keybind_guide = Line::from("<Q>Exit <E>Select <R>Remove <Enter>Execute").white().italic().centered();
-        let block_right_top = Block::bordered()
+        let keybind_guide = Line::from("<Q>Exit <E>Select <R>Remove <F>Find <Enter>Execute").white().italic().centered();
+        let block_left_upper = Block::bordered()
             .border_set(border::PLAIN)
             .border_style(Style::default().fg(LIGHT_BLUE))
             .title(title)
             .merge_borders(MergeStrategy::Exact);
-        let block_right_btm = Block::bordered()
+        let block_left_lower = Block::bordered()
             .border_set(border::PLAIN)
             .border_style(Style::default().fg(LIGHT_BLUE))
             .merge_borders(MergeStrategy::Exact)
             .title_bottom(keybind_guide);
-        let block_left = Block::bordered()
+        let block_right = Block::bordered()
             .border_set(border::PLAIN)
             .border_style(Style::default().fg(LIGHT_BLUE))
             .merge_borders(MergeStrategy::Exact);
 
         // Content declaration
-        let raw_output_serv_title: Vec<String> = self.services_name_cache.clone();
-        let raw_output_serv_short: Vec<String> = self.services_name_short_cache.clone();
-        let raw_output_serv_desc: Vec<String> = self.services_desc_cache.clone();
+        let raw_output_serv_title: &Vec<String> = &self.services_name_cache;
+        let raw_output_serv_short: &Vec<String> = &self.services_name_short_cache;
+        let raw_output_serv_desc: &Vec<String> = &self.services_desc_cache;
 
         let list_services = List::new(raw_output_serv_title.clone())
             .block(Block::new()
@@ -177,11 +141,9 @@ impl App {
             .begin_symbol(Some("▲"))
             .end_symbol(Some("▼"));
 
-        let serv_title = raw_output_serv_title.get(self.services_scrollbar_index).unwrap();
-        let serv_title_short = raw_output_serv_short.get(self.services_scrollbar_index).unwrap();
-        let default_error = String::from("Default");
-        let serv_desc = raw_output_serv_desc.get(self.services_scrollbar_index).unwrap_or(&default_error);
-        // let serv_desc = SERVICES_DESC.get(self.services_scrollbar_index).unwrap_or(&"Default");
+        let serv_title = raw_output_serv_title.get(self.services_scrollbar_index).expect("render washed");
+        let serv_title_short = raw_output_serv_short.get(self.services_scrollbar_index).expect("render washed");
+        let serv_desc = raw_output_serv_desc.get(self.services_scrollbar_index).expect("render washed");
 
         let para_details_title = Paragraph::new(vec![Line::from(
             Span::styled(serv_title, Style::default().bold())), 
@@ -199,7 +161,7 @@ impl App {
             .block(Block::new().padding(Padding::new(3, 3, 0, 0)))
             .wrap(Wrap {trim: true}); 
 
-        let content_header_left = Paragraph::new(
+        let content_header_right = Paragraph::new(
             Line::from("Select batch of services to disable.")
                 .fg(LIGHT_YELLOW).bold().italic())
             .wrap(Wrap {trim: true})
@@ -228,31 +190,97 @@ impl App {
             .highlight_style(Style::default().bg(LIGHT_YELLOW).fg(DARK_BLUE).bold());
 
         // Rendering
-        frame.render_widget(block_left,self.chunks_screen_cache[0]);
-        frame.render_widget(block_right_top,self.chunks_screen_cache[1]);
-        frame.render_widget(block_right_btm,self.chunks_screen_cache[2]);
+        frame.render_widget(block_right,self.layout.chunks_screen[0]);
+        frame.render_widget(block_left_upper,self.layout.chunks_screen[1]);
+        frame.render_widget(block_left_lower,self.layout.chunks_screen[2]);
 
-        frame.render_widget(content_header_left,self.chunks_left_cache[0]);
-        frame.render_widget(button1,self.chunks_left_cache[1]);
-        frame.render_widget(button2,self.chunks_left_cache[2]);
+        frame.render_widget(content_header_right,self.layout.chunks_right[0]);
+        frame.render_widget(button1,self.layout.chunks_right[1]);
+        frame.render_widget(button2,self.layout.chunks_right[2]);
 
-        frame.render_stateful_widget(list_services_count,self.chunks_screen_inner_cache[1], &mut self.services_list_state);
-        frame.render_stateful_widget(list_services,self.chunks_screen_inner_cache[2], &mut self.services_list_state);
-        frame.render_stateful_widget(scrollbar, self.chunks_screen_inner_cache[3], &mut self.services_scrollbar_state);
+        frame.render_stateful_widget(list_services_count,self.layout.chunks_screen_inner[1], &mut self.services_list_state);
+        frame.render_stateful_widget(list_services,self.layout.chunks_screen_inner[2], &mut self.services_list_state);
+        frame.render_stateful_widget(scrollbar, self.layout.chunks_screen_inner[3], &mut self.services_scrollbar_state);
 
-        frame.render_widget(list_selected_title,self.chunks_left_cache[3]);
-        frame.render_widget(list_selected,self.chunks_left_cache[4]);
+        frame.render_widget(list_selected_title,self.layout.chunks_right[3]);
+        frame.render_widget(list_selected,self.layout.chunks_right[4]);
 
-        frame.render_widget(para_details_title,self.chunks_screen_inner_cache[4]);
-        frame.render_widget(para_details_desc,self.chunks_screen_inner_cache[5]);
-        frame.render_widget(cmd_out, self.chunks_screen_inner_cache[6]);
+        frame.render_widget(para_details_title,self.layout.chunks_screen_inner[4]);
+        frame.render_widget(para_details_desc,self.layout.chunks_screen_inner[5]);
+        frame.render_widget(cmd_out, self.layout.chunks_screen_inner[6]);
     }
        
-
     fn create_button(content: String, content_color:Color) -> Paragraph<'static>{
         Paragraph::new(
             Line::from(vec![content.fg(content_color).italic()])
             .centered()).block(Block::bordered().border_style(Style::default().fg(LIGHT_BLUE))
         )
     }
+}
+
+pub fn cache_service_numbering(vec_len: usize)-> Vec<Line<'static>> {
+    let mut serv_count_num: Vec<Line> = Vec::with_capacity(vec_len);
+    for i in 1..=vec_len {
+        let line = Line::from(vec![i.to_string().into(), ". ".into()]).alignment(Alignment::Right);
+        serv_count_num.push(line);
+    }
+    return serv_count_num;
+}
+
+fn calc_layout_main_horizontal(area: Rect) -> Vec<Rect> {
+    Layout::horizontal([
+        Constraint::Fill(1),
+        Constraint::Ratio(1, 3),
+    ]).spacing(Spacing::Overlap(1)).split(area).to_vec()
+}
+
+fn calc_layout_main_vertical(chunk: Rect) -> Vec<Rect> {
+    Layout::vertical([
+        Constraint::Ratio(1, 2),
+        Constraint::Fill(1),
+    ]).spacing(Spacing::Overlap(1)).split(chunk).to_vec()
+}
+
+fn calc_layout_left_upper(chunk: Rect) -> Vec<Rect> {
+    Layout::horizontal([
+        Constraint::Ratio(1, 20),   //margin
+        Constraint::Length(5),
+        Constraint::Fill(1),
+        Constraint::Length(3),
+        Constraint::Length(2),      //margin
+    ]).split(chunk).to_vec()
+}
+
+fn calc_layout_left_lower(chunk: Rect) -> Vec<Rect> {
+    Layout::vertical([
+        Constraint::Length(5),
+        Constraint::Fill(1),
+        Constraint::Fill(1),
+    ]).split(chunk).to_vec()
+}
+
+fn calc_layout_right(chunk: Rect) -> Vec<Rect> {
+    let chunks_right = Layout::vertical([
+        Constraint::Length(8),
+        Constraint::Length(3),
+        Constraint::Length(3),
+        Constraint::Length(4),
+        Constraint::Fill(1),
+    ]).split(chunk);
+    // Further subdivision to horizontally narrow down elements
+    let mut chunks_button = Vec::with_capacity(3);
+    for i in 1..=2 {
+        chunks_button.push(Layout::horizontal([
+            Constraint::Ratio(1,5),
+            Constraint::Fill(1),
+            Constraint::Ratio(1,5),
+        ]).split(chunks_right[i]));
+    }
+    return vec![
+        chunks_right[0], 
+        chunks_button[0][1], 
+        chunks_button[1][1], 
+        chunks_right[3], 
+        chunks_right[4]
+    ];
 }
