@@ -1,4 +1,4 @@
-use crate::{App, ButtonHighlight, ButtonIdent, SERVICES_SAFE, SERVICES_SAFE_SHORT, render_frame::{DARK_BLUE, LIGHT_BLUE, LIGHT_YELLOW}};
+use crate::{App, services, ButtonHighlight, ButtonIdent, SERVICES_SAFE, SERVICES_SAFE_SHORT, render_frame::{DARK_BLUE, LIGHT_BLUE, LIGHT_YELLOW}};
 use ratatui::{layout::Rect, style::Color};
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use color_eyre::eyre::{Context, Result}; // Or your Result type
@@ -51,7 +51,8 @@ impl App{
                     self.search_toggle = false;
                 }
                 else {
-                    self.disable_services();
+                    self.cmd_output_stop = services::stop_services(&self.services_code_selected).unwrap_or_else(|e| e);
+                    self.cmd_output_disable = services::disable_services(&self.services_code_selected).unwrap_or_else(|e| e);
                 }
             },
 

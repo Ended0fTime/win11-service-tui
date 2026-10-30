@@ -218,6 +218,7 @@ impl App {
     }
 }
 
+
 pub fn cache_service_numbering(vec_len: usize)-> Vec<Line<'static>> {
     let mut serv_count_num: Vec<Line> = Vec::with_capacity(vec_len);
     for i in 1..=vec_len {

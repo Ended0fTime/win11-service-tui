@@ -1,61 +1,45 @@
-use crate::{App};
 use std::process::{Command, Stdio};
 use std::os::windows::process::CommandExt;
-use color_eyre::{
-    Result, eyre::WrapErr,
-};
-
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;   // Windows API flag
 
-
-impl App {
-    pub fn disable_services(&mut self) {
-        self.cmd_output_stop.clear();    // clear for new message
-
-        let mut i = 0;
-        for code in &self.services_code_selected {
-            let output_stop = Command::new("sc")
-                .arg("stop")
-                .arg(code)
-                .creation_flags(CREATE_NO_WINDOW)
-                .output().expect("couldnt stop FATAL");
-            let output_disable = Command::new("sc")
-                .arg("config")
-                .arg(code)
-                .arg("start=")
-                .arg("disabled")
-                .creation_flags(CREATE_NO_WINDOW)
-                .output().expect("couldnt disable FATAL");
-            
-            let stdout = String::from_utf8_lossy(&output_stop.stdout);
-            if stdout.contains("FAILED") && !stdout.contains("1062") {
-                self.cmd_output_stop.push_str(
-                    &format!(" Please relaunch the program with administrator rights. Access denied at Index {}: {}", i, &self.services_selected[i]));
-                break;
-            }
-            else {
-                self.cmd_output_stop = String::from("Stopped all running services");
-            }
-
-            let stdout_disable = String::from_utf8_lossy(&output_disable.stdout);
-            self.cmd_output_disable.push_str(&stdout_disable.to_string());
-            if stdout_disable.contains("FAILED") {
-                self.cmd_output_disable.push_str(
-                    &format!(
-                        " Please relaunch the program with administrator rights. Access denied at Index {}: {}", 
-                        i, &self.services_selected[i]
-                    ));
-                break;
-            }
-            else {
-                self.cmd_output_disable.clear();
-                self.cmd_output_disable = String::from(" Successfully disabled selected services.");
-            }
-            i = i + 1;
+pub fn stop_services(services_codes: &[String]) -> Result<String, String> {
+    let mut i = 0;
+    for code in services_codes {
+        let output_stop = Command::new("sc")
+            .arg("stop")
+            .arg(code)
+            .creation_flags(CREATE_NO_WINDOW)
+            .output().expect("couldnt stop FATAL");             
+        let stdout = String::from_utf8_lossy(&output_stop.stdout);
+        if stdout.contains("FAILED") && !stdout.contains("1062") {
+            return Err(
+                format!(" Please relaunch the program with administrator rights. Access denied at Index {}: {}", i, code));
         }
+        i += 1;
     }
+    return Ok(String::from("Stopped all selected running services"));
+}
 
+pub fn disable_services(services_codes: &[String]) -> Result<String, String> {
+    let mut i = 0;
+    for code in services_codes {
+        let output_disable = Command::new("sc")
+            .arg("config")
+            .arg(code)
+            .arg("start=")
+            .arg("disabled")
+            .creation_flags(CREATE_NO_WINDOW)
+            .output().expect("couldnt disable FATAL");
+
+        let stdout = String::from_utf8_lossy(&output_disable.stdout);
+        if stdout.contains("FAILED") {
+            return Err(
+                format!(" Please relaunch the program with administrator rights. Access denied at Index {}: {}", i, services_codes[i]));
+        }
+        i += 1;
+    }
+    return Ok(String::from("Successfully disabled all selected services"));
 }
 
 pub fn get_services_name_short() -> Vec<String> {
