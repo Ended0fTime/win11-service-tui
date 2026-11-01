@@ -18,12 +18,11 @@ pub fn stop_services(services_codes: &[String]) -> Result<String, String> {
         }
         i += 1;
     }
-    return Ok(String::from("Stopped all selected running services"));
+    Ok(String::from("Stopped all selected running services"))
 }
 
 pub fn disable_services(services_codes: &[String]) -> Result<String, String> {
-    let mut i = 0;
-    for code in services_codes {
+    for (i, code) in services_codes.iter().enumerate() {
         let output_disable = Command::new("sc")
             .arg("config")
             .arg(code)
@@ -37,9 +36,8 @@ pub fn disable_services(services_codes: &[String]) -> Result<String, String> {
             return Err(
                 format!(" Please relaunch the program with administrator rights. Access denied at Index {}: {}", i, services_codes[i]));
         }
-        i += 1;
     }
-    return Ok(String::from("Successfully disabled all selected services"));
+    Ok(String::from("Successfully disabled all selected services"))
 }
 
 pub fn get_services_name_short() -> Vec<String> {
@@ -77,21 +75,15 @@ pub fn get_services_name() -> Vec<String> {
 }
 
 pub fn get_services_desc() -> Vec<String> {
-    let mut services_desc = Command::new("powershell")
+    let services_desc = Command::new("powershell")
         .args([
             "-Command",
-            "Get-CimInstance Win32_Service | Select-Object Description | Format-List"
+            "Get-CimInstance Win32_Service | Select-Object -ExpandProperty Description"
         ])
         .creation_flags(CREATE_NO_WINDOW)
-        .stdout(Stdio::piped())
-        .spawn().expect("get service failed");
-    let stdout = services_desc.stdout.take().expect("service desc is missing");
-    let output = Command::new("findstr")
-        .stdin(stdout)
-        .args(["Description : "])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output().expect("cannot filter desc");
-    String::from_utf8_lossy(&output.stdout).into_owned().lines()
-    .map(|line| {line.replace("Description : ", "").trim().to_string()     
+        .output().expect("get service failed");
+    let output = services_desc.stdout;
+    String::from_utf8_lossy(&output).into_owned().lines()
+    .map(|line| {line.trim().to_string()     
     }).collect()
 }
