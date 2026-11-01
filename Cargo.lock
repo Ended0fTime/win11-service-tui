@@ -1948,7 +1948,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "win11-service-disabler"
+name = "win11-service-tui"
 version = "0.1.0"
 dependencies = [
  "color-eyre",

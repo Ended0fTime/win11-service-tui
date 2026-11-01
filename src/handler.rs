@@ -28,7 +28,7 @@ impl App{
                     self.services.list_state.select_previous();
                 },
                 KeyCode::Down | KeyCode::Char('s') => {
-                    if self.check_scrollbar_within_bounds(self.services.idx) {
+                    if check_scrollbar_within_bounds(self.services_name_cache.len(), self.services.idx) {
                         self.services.idx = self.services.idx.saturating_add(1);
                         self.services.list_state.select_next();
                     }
@@ -47,8 +47,6 @@ impl App{
                 KeyCode::Char('f') | KeyCode::Char('F') => {
                     self.search_toggle = true;
                     self.search.selected = self.search_services();
-                    self.search.idx = 0;
-                    self.search.list_state.select(Some(0));
                 },
                 KeyCode::Char('m') => {
                     self.cmd_output_stop = services::stop_services(&self.services.code_selected).unwrap_or_else(|e| e);
@@ -60,25 +58,23 @@ impl App{
         else {
             match key_event.code {
                 KeyCode::Enter => {
-                    let mut search_selected = String::new();
                     if self.search_to_services_idx.len() > 0 {
-                        search_selected = self.services_name_cache[self.search_to_services_idx[self.search.idx]].clone();
+                        let idx = self.search_to_services_idx[self.search.idx];
+                        let search_selected = self.services_name_cache[idx].clone();
                         self.services.selected.push(search_selected);
-                        self.search_toggle = false;
                     }
+                    self.search_toggle = false;
                 },
                 KeyCode::Backspace => {
                     self.search_string.pop();
                     self.search.selected = self.search_services();
-                    self.search.idx = 0;
-                    self.search.list_state.select(Some(0));
                 }
                 KeyCode::Up => {
                     self.search.idx = self.search.idx.saturating_sub(1);
                     self.search.list_state.select_previous();
                 },
                 KeyCode::Down => {
-                    if self.check_scrollbar_within_bounds(self.search.idx) {
+                    if check_scrollbar_within_bounds(self.search_to_services_idx.len(), self.search.idx) {
                         self.search.idx = self.search.idx.saturating_add(1);
                         self.search.list_state.select_next();
                     }
@@ -86,8 +82,6 @@ impl App{
                 KeyCode::Char(c)  => {
                     self.search_string.push(c);
                     self.search.selected = self.search_services();
-                    self.search.idx = 0;
-                    self.search.list_state.select(Some(0));
                 }
                 _ => {}
             }
@@ -124,7 +118,7 @@ impl App{
                     self.services.list_state.select_previous();
                 },
                 MouseEventKind::ScrollDown => {
-                    if self.check_scrollbar_within_bounds(self.services.idx) {
+                    if check_scrollbar_within_bounds(self.services_name_cache.len(), self.services.idx) {
                         self.services.idx = self.services.idx.saturating_add(1);
                         self.services.list_state.select_next();
                     }
@@ -134,14 +128,13 @@ impl App{
         }
         Ok(())
     }
-
-    fn check_scrollbar_within_bounds(&self, idx: usize) -> bool {
-        idx < self.services.count_num.len() - 1
-    }
+    
 
     pub fn search_services(&mut self) -> Vec<String> {
-         let query_lower: String = self.search_string.iter().collect();
-         let services_name = self.services_name_cache.clone();
+        self.search.idx = 0;
+        self.search.list_state.select(Some(0));
+        let query_lower: String = self.search_string.iter().collect();
+        let services_name = self.services_name_cache.clone();
          self.search_to_services_idx = services_name.iter()
             .enumerate()
             .filter(|(_, s)| s.to_lowercase().contains(&query_lower))
@@ -158,6 +151,9 @@ impl App{
     }
 }
 
+fn check_scrollbar_within_bounds(len: usize, idx: usize) -> bool {
+    idx < len -1
+}
 
 fn is_inside(rect: Rect, col: u16, row: u16) -> bool {
     col >= rect.x && col < rect.x + rect.width &&

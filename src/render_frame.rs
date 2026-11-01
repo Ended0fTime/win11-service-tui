@@ -3,9 +3,8 @@ use ratatui::{
     Frame, 
     layout::{Alignment, Constraint, Spacing, Layout, Rect}, 
     style::{Color, Style, Stylize}, 
-    symbols::{border, scrollbar, merge::MergeStrategy}, text::{Line, Text, Span}, 
+    symbols::{border, merge::MergeStrategy}, text::{Line, Span}, 
     widgets::{Block, Borders, Padding, 
-        BorderType::{self, Rounded, Thick}, 
         List, Paragraph, Wrap, Scrollbar, ScrollbarOrientation},
 };
 
@@ -101,6 +100,19 @@ impl App {
 
     }
 
+    fn render_execute_select(&mut self, frame: &mut Frame) {
+        let screen_area = self.layout.screen_size;
+        let usable_layout = calc_layout_execute(screen_area);
+
+        // let black_block = Block::new().bg(Color::Black);
+        let searchbar_content: String = self.search_string.iter().collect();
+        let too_small_para = Paragraph::new(searchbar_content) 
+            .fg(Color::default()).bold().centered()
+            .block(Block::bordered().border_style(Style::default().fg(LIGHT_YELLOW)));
+        // frame.render_widget(black_block, screen_area);
+        frame.render_widget(too_small_para, usable_layout[0]);
+    }
+
     fn render_main(&mut self, frame: &mut Frame) {
         // Outer frames
         let title = Line::from(" Win11 Service Disabler ").fg(LIGHT_YELLOW).italic();
@@ -165,16 +177,16 @@ impl App {
             .wrap(Wrap {trim: true})
             .centered()
             .block(Block::new().padding(Padding::new(1, 1, 4, 0)));
-        let mut button1 = App::create_button("Safe services".to_string(), Color::White);
-        let mut button2 = App::create_button("Clear".to_string(), Color::White);
+        let mut button1 = App::create_button("Telemetry".to_string(), Color::White);
+        let mut button2 = App::create_button("Clear selection".to_string(), Color::White);
 
         // Color management based on events
         match self.mouse_pos {
             ButtonIdent::Button1(ButtonHighlight::Pressed(content_color)) => {
-                button1 = App::create_button("Safe".to_string(), content_color).bold();
+                button1 = App::create_button("Telemetry".to_string(), content_color).bold();
             }
             ButtonIdent::Button2(ButtonHighlight::Pressed(content_color)) => {
-                button2 = App::create_button("Unsafe".to_string(), content_color).bold();
+                button2 = App::create_button("Clear selectiony".to_string(), content_color).bold();
             }
             _ => {}
         }
@@ -300,4 +312,21 @@ fn calc_layout_search(chunk: Rect) -> Vec<Rect> {
         ]).split(vertical_layout[i]).to_vec());
     }
     return vec![horizontal_layout[0][1], horizontal_layout[1][1]];
+}
+
+fn calc_layout_execute(chunk: Rect) -> Vec<Rect> {
+    let vertical_layout = Layout::vertical([
+        Constraint::Fill(1),
+        Constraint::Length(3),
+        Constraint::Fill(1),
+    ]).split(chunk);
+    let horizontal_layout = Layout::horizontal([
+        Constraint::Ratio(1, 8),
+        Constraint::Fill(1),
+        Constraint::Fill(1),
+        Constraint::Fill(1),
+        Constraint::Ratio(1, 8),
+    ]).split(vertical_layout[1]).to_vec();
+
+    return vec![horizontal_layout[1], horizontal_layout[2], horizontal_layout[3]];
 }

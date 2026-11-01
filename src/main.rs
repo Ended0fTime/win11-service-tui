@@ -64,7 +64,6 @@ pub struct LayoutCache {
     chunks_screen: Vec<Rect>,
     chunks_screen_inner: Vec<Rect>,
     chunks_right: Vec<Rect>,
-    chunks_search: Vec<Rect>
 }
 
 #[derive(Debug)]
@@ -99,6 +98,7 @@ const SERVICES_SAFE:&[&str] = &[
     "Windows Insider Service",
     "Microsoft Usage and Quality Insights",
     "Windows Health and Optimized Experiences",
+    "Windows Insider Service"
 ];
 
 const SERVICES_SAFE_SHORT:&[&str] = &[
@@ -108,6 +108,7 @@ const SERVICES_SAFE_SHORT:&[&str] = &[
     "wisvc",
     "wuqisvc",
     "whesvc",
+    ""
 ];
 
 
