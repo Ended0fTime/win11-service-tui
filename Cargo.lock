@@ -434,16 +434,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferlex-tui"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "crossterm",
- "embed-resource",
- "ratatui",
-]
-
-[[package]]
 name = "filedescriptor"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1955,6 +1945,16 @@ dependencies = [
  "lazy_static",
  "serde",
  "wezterm-dynamic",
+]
+
+[[package]]
+name = "win11-service-disabler"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "crossterm",
+ "embed-resource",
+ "ratatui",
 ]
 
 [[package]]
