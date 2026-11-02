@@ -14,5 +14,6 @@ embed-resource = "2.5"
 [profile.release]
 codegen-units = 1
 lto = true
-opt-level = "s"
-strip = true
+opt-level = 0
+strip = false
+debug = true

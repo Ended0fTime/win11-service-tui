@@ -1,4 +1,4 @@
-use crate::{App, ButtonHighlight, ButtonIdent};
+use crate::{App, Button};
 use ratatui::{
     Frame, 
     layout::{Alignment, Constraint, Spacing, Layout, Rect}, 
@@ -56,6 +56,9 @@ impl App {
             }
         else {
             self.render_main(frame);
+            if self.execute_toggle {
+                self.render_execute_select(frame);
+            }
         }
     }
 
@@ -104,13 +107,32 @@ impl App {
         let screen_area = self.layout.screen_size;
         let usable_layout = calc_layout_execute(screen_area);
 
-        // let black_block = Block::new().bg(Color::Black);
-        let searchbar_content: String = self.search_string.iter().collect();
-        let too_small_para = Paragraph::new(searchbar_content) 
-            .fg(Color::default()).bold().centered()
-            .block(Block::bordered().border_style(Style::default().fg(LIGHT_YELLOW)));
-        // frame.render_widget(black_block, screen_area);
-        frame.render_widget(too_small_para, usable_layout[0]);
+        let mut button_auto = create_button(String::from("Auto"), LIGHT_YELLOW);
+        let mut button_auto_delayed = create_button(String::from("Auto (Delayed)"), LIGHT_YELLOW);
+        let mut button_manual = create_button(String::from("Manually Triggered"), LIGHT_YELLOW);
+        let mut button_disable = create_button(String::from("Disable"), LIGHT_YELLOW);
+
+        // Color management based on events
+        match self.mouse_pos {
+            Button::ButtonAuto(content_color) => {
+                button_auto = create_button("Auto".to_string(), content_color).bold();
+            }
+            Button::ButtonAutoDelayed(content_color) => {
+                button_auto_delayed = create_button("Auto (Delayed)".to_string(), content_color).bold();
+            }
+            Button::ButtonManual(content_color) => {
+                button_manual = create_button("Manually Triggered".to_string(), content_color).bold();
+            }
+            Button::ButtonDisable(content_color) => {
+                button_disable = create_button("Disable".to_string(), content_color).bold();
+            }
+            _ => {}
+        }
+
+        frame.render_widget(button_auto, usable_layout[0]);
+        frame.render_widget(button_auto_delayed, usable_layout[1]);
+        frame.render_widget(button_manual, usable_layout[2]);
+        frame.render_widget(button_disable, usable_layout[3]);
     }
 
     fn render_main(&mut self, frame: &mut Frame) {
@@ -153,14 +175,14 @@ impl App {
             .end_symbol(Some("▼"));
 
         let defaulterr = String::from("No description given.");
-        let serv_title_short = output_serv_short.get(self.services.idx).unwrap_or(&defaulterr);
+        let serv_title_short = output_serv_short.get(self.services.idx).unwrap_or(&defaulterr).clone();
         let serv_desc = output_serv_desc.get(self.services.idx).unwrap_or(&defaulterr);
 
         let para_details_title = Paragraph::new(
-            Line::from(Span::styled(serv_title_short, Style::default().bold())))
-            .block(Block::new().padding(Padding::new(3, 3, 1, 0))); 
-        let para_details_desc = Paragraph::new(Line::from(vec![
-            Span::styled(serv_desc, Style::default().green())])) 
+            Line::from(serv_title_short).bold())
+            .block(Block::new().padding(Padding::new(3, 3, 1, 0)));        
+        let para_details_desc = Paragraph::new(
+            Span::styled(serv_desc, Style::default().green()))
             .block(Block::new().padding(Padding::new(3, 3, 0, 0)))
             .wrap(Wrap {trim: true}); 
 
@@ -177,16 +199,16 @@ impl App {
             .wrap(Wrap {trim: true})
             .centered()
             .block(Block::new().padding(Padding::new(1, 1, 4, 0)));
-        let mut button1 = App::create_button("Telemetry".to_string(), Color::White);
-        let mut button2 = App::create_button("Clear selection".to_string(), Color::White);
+        let mut button1 = create_button("Telemetry".to_string(), Color::White);
+        let mut button2 = create_button("Clear selection".to_string(), Color::White);
 
         // Color management based on events
         match self.mouse_pos {
-            ButtonIdent::Button1(ButtonHighlight::Pressed(content_color)) => {
-                button1 = App::create_button("Telemetry".to_string(), content_color).bold();
+            Button::Button1(content_color) => {
+                button1 = create_button("Telemetry".to_string(), content_color).bold();
             }
-            ButtonIdent::Button2(ButtonHighlight::Pressed(content_color)) => {
-                button2 = App::create_button("Clear selectiony".to_string(), content_color).bold();
+            Button::Button2(content_color) => {
+                button2 = create_button("Clear selection".to_string(), content_color).bold();
             }
             _ => {}
         }
@@ -219,15 +241,15 @@ impl App {
         frame.render_widget(para_details_desc,self.layout.chunks_screen_inner[5]);
         frame.render_widget(cmd_out, self.layout.chunks_screen_inner[6]);
     }
-       
-    fn create_button(content: String, content_color:Color) -> Paragraph<'static>{
-        Paragraph::new(
-            Line::from(vec![content.fg(content_color).italic()])
-            .centered()).block(Block::bordered().border_style(Style::default().fg(LIGHT_BLUE))
-        )
-    }
 }
 
+
+fn create_button(content: String, content_color:Color) -> Paragraph<'static>{
+    Paragraph::new(
+        Line::from(vec![content.fg(content_color).italic()])
+        .centered()).block(Block::bordered().border_style(Style::default().fg(LIGHT_BLUE))
+    )
+}
 
 pub fn cache_service_numbering(vec_len: usize)-> Vec<Line<'static>> {
     let mut serv_count_num: Vec<Line> = Vec::with_capacity(vec_len);
@@ -264,7 +286,7 @@ fn calc_layout_left_upper(chunk: Rect) -> Vec<Rect> {
 
 fn calc_layout_left_lower(chunk: Rect) -> Vec<Rect> {
     Layout::vertical([
-        Constraint::Length(5),
+        Constraint::Length(4),
         Constraint::Fill(1),
         Constraint::Fill(1),
     ]).split(chunk).to_vec()
@@ -316,17 +338,18 @@ fn calc_layout_search(chunk: Rect) -> Vec<Rect> {
 
 fn calc_layout_execute(chunk: Rect) -> Vec<Rect> {
     let vertical_layout = Layout::vertical([
-        Constraint::Fill(1),
+        Constraint::Ratio(3, 4),
         Constraint::Length(3),
         Constraint::Fill(1),
     ]).split(chunk);
     let horizontal_layout = Layout::horizontal([
-        Constraint::Ratio(1, 8),
+        Constraint::Ratio(1, 20),
         Constraint::Fill(1),
         Constraint::Fill(1),
         Constraint::Fill(1),
-        Constraint::Ratio(1, 8),
+        Constraint::Fill(1),
+        Constraint::Ratio(1, 20),
+        Constraint::Ratio(1, 3),
     ]).split(vertical_layout[1]).to_vec();
-
-    return vec![horizontal_layout[1], horizontal_layout[2], horizontal_layout[3]];
+    return vec![horizontal_layout[1], horizontal_layout[2], horizontal_layout[3], horizontal_layout[4]];
 }

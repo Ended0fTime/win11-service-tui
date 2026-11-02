@@ -1,4 +1,4 @@
-use crate::{App, services, ButtonHighlight, ButtonIdent, SERVICES_SAFE, SERVICES_SAFE_SHORT, render_frame::{DARK_BLUE, LIGHT_BLUE, LIGHT_YELLOW}};
+use crate::{App, services, Button, ExecuteMode, SERVICES_SAFE, SERVICES_SAFE_SHORT, render_frame::{DARK_BLUE, LIGHT_BLUE, LIGHT_YELLOW}};
 use ratatui::{layout::Rect, style::Color};
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use color_eyre::eyre::{Context, Result}; // Or your Result type
@@ -18,74 +18,14 @@ impl App{
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<()> {
-        if !self.search_toggle {
-            match key_event.code {
-                KeyCode::Char('q') | KeyCode::Char('Q') => {
-                    self.exit()
-                },
-                KeyCode::Up | KeyCode::Char('w') => {
-                    self.services.idx = self.services.idx.saturating_sub(1);
-                    self.services.list_state.select_previous();
-                },
-                KeyCode::Down | KeyCode::Char('s') => {
-                    if check_scrollbar_within_bounds(self.services_name_cache.len(), self.services.idx) {
-                        self.services.idx = self.services.idx.saturating_add(1);
-                        self.services.list_state.select_next();
-                    }
-                },
-                KeyCode::Char('e') | KeyCode::Char('E') => {
-                    let selection = &self.services_name_cache[self.services.idx].to_string();
-                    if !check_dupe(&self.services.selected, selection) {
-                        self.services.selected.push((self.services_name_cache[self.services.idx]).to_string());
-                        self.services.code_selected.push((self.services_name_short_cache[self.services.idx]).to_string());
-                    }
-                },
-                KeyCode::Char('r') | KeyCode::Char('R') => {
-                    self.services.selected.pop();
-                    self.services.code_selected.pop();
-                },
-                KeyCode::Char('f') | KeyCode::Char('F') => {
-                    self.search_toggle = true;
-                    self.search.selected = self.search_services();
-                },
-                KeyCode::Char('m') => {
-                    self.cmd_output_stop = services::stop_services(&self.services.code_selected).unwrap_or_else(|e| e);
-                    self.cmd_output_disable = services::disable_services(&self.services.code_selected).unwrap_or_else(|e| e);
-                },
-                _ => {}
-            }
+        if self.search_toggle {
+            self.key_event_search(key_event);
+        }
+        else if self.execute_toggle {
+            self.key_event_execute(key_event);
         }
         else {
-            match key_event.code {
-                KeyCode::Enter => {
-                    if self.search_to_services_idx.len() > 0 {
-                        let idx = self.search_to_services_idx[self.search.idx];
-                        let search_selected = self.services_name_cache[idx].clone();
-                        self.services.selected.push(search_selected);
-                    }
-                    self.search_toggle = false;
-                },
-                KeyCode::Backspace => {
-                    self.search_string.pop();
-                    self.search.selected = self.search_services();
-                }
-                KeyCode::Up => {
-                    self.search.idx = self.search.idx.saturating_sub(1);
-                    self.search.list_state.select_previous();
-                },
-                KeyCode::Down => {
-                    if check_scrollbar_within_bounds(self.search_to_services_idx.len(), self.search.idx) {
-                        self.search.idx = self.search.idx.saturating_add(1);
-                        self.search.list_state.select_next();
-                    }
-                },
-                KeyCode::Char(c)  => {
-                    self.search_string.push(c);
-                    self.search.selected = self.search_services();
-                }
-                _ => {}
-            }
-
+            self.key_event_main(key_event);
         }
         Ok(())
     }
@@ -96,14 +36,14 @@ impl App{
                 // Button 
                 MouseEventKind::Down(MouseButton::Left) => {
                     if is_inside(self.layout.chunks_right[1], mouse_event.column, mouse_event.row) {
-                        self.mouse_pos = ButtonIdent::Button1(ButtonHighlight::Pressed(Color::Green));
+                        self.mouse_pos = Button::Button1(Color::Green);
                         if self.services.selected.is_empty() {
                             self.services.selected.extend(SERVICES_SAFE.iter().map(|x| x.to_string()));
                             self.services.code_selected.extend(SERVICES_SAFE_SHORT.iter().map(|x| x.to_string()));
                         }
                     }
                     else if is_inside(self.layout.chunks_right[2], mouse_event.column, mouse_event.row) {
-                        self.mouse_pos = ButtonIdent::Button2(ButtonHighlight::Pressed(Color::Red));
+                        self.mouse_pos = Button::Button2(Color::Red);
                         if !self.services.selected.is_empty() {
                             self.services.selected.clear();
                             self.services.code_selected.clear();
@@ -111,7 +51,7 @@ impl App{
                     }
                 },
                 MouseEventKind::Up(MouseButton::Left) => {
-                    self.mouse_pos = ButtonIdent::default();
+                    self.mouse_pos = Button::default();
                 },
                 MouseEventKind::ScrollUp => {
                     self.services.idx = self.services.idx.saturating_sub(1);
@@ -128,9 +68,135 @@ impl App{
         }
         Ok(())
     }
-    
 
-    pub fn search_services(&mut self) -> Vec<String> {
+
+    fn key_event_search(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Esc => {
+                self.search_toggle = false;
+            },
+            KeyCode::Enter => {
+                if self.search_to_services_idx.len() > 0 {
+                    let idx = self.search_to_services_idx[self.search.idx];
+                    let search_selected = self.services_name_cache[idx].clone();
+                    self.services.selected.push(search_selected);
+                }
+                self.search_toggle = false;
+            },
+            KeyCode::Backspace => {
+                self.search_string.pop();
+                self.search.selected = self.search_services();
+            },
+            KeyCode::Up => {
+                self.search.idx = self.search.idx.saturating_sub(1);
+                self.search.list_state.select_previous();
+            },
+            KeyCode::Down => {
+                if check_scrollbar_within_bounds(self.search_to_services_idx.len(), self.search.idx) {
+                    self.search.idx = self.search.idx.saturating_add(1);
+                    self.search.list_state.select_next();
+                }
+            },
+            KeyCode::Char(c)  => {
+                self.search_string.push(c);
+                self.search.selected = self.search_services();
+            },
+            _ => {}
+        }
+    }
+    
+    fn key_event_execute(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Esc => {
+                self.execute_toggle = false;
+            },
+            KeyCode::Enter => {
+                self.execute_command();
+            },
+            KeyCode::Char('1') => {
+                self.execute_select = ExecuteMode::Auto;
+                self.mouse_pos = Button::ButtonAuto(Color::Red);
+            },
+            KeyCode::Char('2') => {
+                self.execute_select = ExecuteMode::AutoDelayed;
+                self.mouse_pos = Button::ButtonAutoDelayed(Color::Red);
+            },
+            KeyCode::Char('3') => {
+                self.execute_select = ExecuteMode::Manual;
+                self.mouse_pos = Button::ButtonManual(Color::Red);
+            },
+            KeyCode::Char('4') => {
+                self.execute_select = ExecuteMode::Disable;
+                self.mouse_pos = Button::ButtonDisable(Color::Red);
+            }
+            _ => {         
+                self.execute_select = ExecuteMode::default();
+                self.mouse_pos = Button::default();
+            }
+        }
+    } 
+
+    fn execute_command(&mut self) {
+        match self.execute_select {
+            ExecuteMode::Auto => {
+                    self.cmd_output_disable = services::enable_auto(&self.services.code_selected).unwrap_or_else(|e| e);
+            }
+            ExecuteMode::AutoDelayed => {
+                    self.cmd_output_disable = services::enable_auto_delayed(&self.services.code_selected).unwrap_or_else(|e| e);
+            }
+            ExecuteMode::Manual => {
+                    self.cmd_output_disable = services::enable_manual(&self.services.code_selected).unwrap_or_else(|e| e);
+            }
+            ExecuteMode::Disable => {
+                self.cmd_output_stop = services::stop_services(&self.services.code_selected).unwrap_or_else(|e| e);
+                self.cmd_output_disable = services::disable_services(&self.services.code_selected).unwrap_or_else(|e| e);
+            }
+            ExecuteMode::Default => {
+                self.cmd_output_disable = String::from("No option selected.");
+            }
+        }
+        self.execute_toggle = false;
+    }
+
+    fn key_event_main(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Char('q') | KeyCode::Char('Q') => {
+                self.exit()
+            },
+            KeyCode::Up | KeyCode::Char('w') => {
+                self.services.idx = self.services.idx.saturating_sub(1);
+                self.services.list_state.select_previous();
+            },
+            KeyCode::Down | KeyCode::Char('s') => {
+                if check_scrollbar_within_bounds(self.services_name_cache.len(), self.services.idx) {
+                    self.services.idx = self.services.idx.saturating_add(1);
+                    self.services.list_state.select_next();
+                }
+            },
+            KeyCode::Char('e') | KeyCode::Char('E') => {
+                let selection = &self.services_name_cache[self.services.idx].to_string();
+                if !check_dupe(&self.services.selected, selection) {
+                    self.services.selected.push((self.services_name_cache[self.services.idx]).to_string());
+                    self.services.code_selected.push((self.services_name_short_cache[self.services.idx]).to_string());
+                }
+            },
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                self.services.selected.pop();
+                self.services.code_selected.pop();
+            },
+            KeyCode::Char('f') | KeyCode::Char('F') => {
+                self.search_toggle = true;
+                self.search.selected = self.search_services();
+            },
+            KeyCode::Char('m') => {
+                self.execute_toggle = true;
+            },
+            _ => {}
+        }            
+    }
+
+
+    fn search_services(&mut self) -> Vec<String> {
         self.search.idx = 0;
         self.search.list_state.select(Some(0));
         let query_lower: String = self.search_string.iter().collect();
@@ -160,6 +226,6 @@ fn is_inside(rect: Rect, col: u16, row: u16) -> bool {
     row >= rect.y && row < rect.y + rect.height
 }
 
-pub fn check_dupe(select_list: &Vec<String>, selection: &String) -> bool {
+fn check_dupe(select_list: &Vec<String>, selection: &String) -> bool {
     select_list.contains(selection)
 }

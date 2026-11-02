@@ -38,12 +38,15 @@ pub struct App {
     
     search_string: Vec<char>,
     search_to_services_idx: Vec<usize>,
+
     search_toggle: bool,
+    execute_toggle: bool,
+    execute_select: ExecuteMode,
 
     cmd_output_stop: String,
     cmd_output_disable: String,
 
-    mouse_pos: ButtonIdent,
+    mouse_pos: Button,
 
     exit: bool,
 }
@@ -66,29 +69,36 @@ pub struct LayoutCache {
     chunks_right: Vec<Rect>,
 }
 
+
 #[derive(Debug)]
-pub enum ButtonHighlight {
-    NotPressed(Color),
-    Pressed(Color),
+pub enum Button {
+    Button1(Color),
+    Button2(Color),
+    ButtonAuto(Color),
+    ButtonAutoDelayed(Color),
+    ButtonManual(Color),
+    ButtonDisable(Color),
+    Default(),
 }
-impl Default for ButtonHighlight {
+impl Default for Button {
     fn default() -> Self {
-        ButtonHighlight::NotPressed(Color::Red)
+        Button::Default()
     }
 }
 
 #[derive(Debug)]
-pub enum ButtonIdent {
-    Button1(ButtonHighlight),
-    Button2(ButtonHighlight),
-    Exit(ButtonHighlight),
+pub enum ExecuteMode {
+    Auto,
+    AutoDelayed,
+    Manual,
+    Disable,
+    Default
 }
-impl Default for ButtonIdent {
+impl Default for ExecuteMode {
     fn default() -> Self {
-        ButtonIdent::Exit(ButtonHighlight::default())
+        ExecuteMode::Default
     }
 }
-
 
 // Text contents Pre-defining
 const SERVICES_SAFE:&[&str] = &[
