@@ -4,7 +4,6 @@ use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent,
 use color_eyre::eyre::{Context, Result}; // Or your Result type
 
 impl App{ 
-    // Input Handling
     pub fn handle_events(&mut self) -> Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => 
@@ -31,42 +30,93 @@ impl App{
     }
 
     fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> Result<()> {
-        if !self.search_toggle {
+        if self.search_toggle {
+            match mouse_event.kind {
+                MouseEventKind::ScrollUp => {
+                    self.scroll_up_search();
+                },
+                MouseEventKind::ScrollDown => {
+                    self.scroll_down_search();
+                },
+                _ => {}
+            }
+        }
+        else if self.execute_toggle {
             match mouse_event.kind {
                 // Button 
                 MouseEventKind::Down(MouseButton::Left) => {
-                    if is_inside(self.layout.chunks_right[1], mouse_event.column, mouse_event.row) {
-                        self.mouse_pos = Button::Button1(Color::Green);
-                        if self.services.selected.is_empty() {
-                            self.services.selected.extend(SERVICES_SAFE.iter().map(|x| x.to_string()));
-                            self.services.code_selected.extend(SERVICES_SAFE_SHORT.iter().map(|x| x.to_string()));
-                        }
-                    }
-                    else if is_inside(self.layout.chunks_right[2], mouse_event.column, mouse_event.row) {
-                        self.mouse_pos = Button::Button2(Color::Red);
-                        if !self.services.selected.is_empty() {
-                            self.services.selected.clear();
-                            self.services.code_selected.clear();
-                        }
-                    }
-                },
-                MouseEventKind::Up(MouseButton::Left) => {
-                    self.mouse_pos = Button::default();
+                    self.check_click_pos_execute(mouse_event);
                 },
                 MouseEventKind::ScrollUp => {
-                    self.services.idx = self.services.idx.saturating_sub(1);
-                    self.services.list_state.select_previous();
+                    self.scroll_up();
                 },
                 MouseEventKind::ScrollDown => {
-                    if check_scrollbar_within_bounds(self.services_name_cache.len(), self.services.idx) {
-                        self.services.idx = self.services.idx.saturating_add(1);
-                        self.services.list_state.select_next();
-                    }
+                    self.scroll_down();
+                },
+                _ => {}
+            }
+        }
+        else {
+            match mouse_event.kind {
+                // Button 
+                MouseEventKind::Down(MouseButton::Left) => {
+                    self.check_click_pos(mouse_event);
+                },
+                MouseEventKind::ScrollUp => {
+                    self.scroll_up();
+                },
+                MouseEventKind::ScrollDown => {
+                    self.scroll_down();
                 },
                 _ => {}
             }
         }
         Ok(())
+    }
+
+
+    fn check_click_pos(&mut self, mouse_event: MouseEvent) {
+        if is_inside(self.layout.chunks_right[1], mouse_event.column, mouse_event.row) {
+            self.mouse_pos = Button::Button1(Color::Green);
+            self.select_telemetry();
+        }
+        else if is_inside(self.layout.chunks_right[2], mouse_event.column, mouse_event.row) {
+            self.mouse_pos = Button::Button2(Color::Red);
+            self.selection_reset();
+        }
+    }
+
+    fn selection_reset(&mut self) {
+        if !self.services.selected.is_empty() {
+            self.services.selected.clear();
+            self.services.code_selected.clear();
+        }
+    }
+    
+    fn select_telemetry(&mut self) {
+        if self.services.selected.is_empty() {
+            self.services.selected.extend(SERVICES_SAFE.iter().map(|x| x.to_string()));
+            self.services.code_selected.extend(SERVICES_SAFE_SHORT.iter().map(|x| x.to_string()));
+        }
+    }
+    
+    fn check_click_pos_execute(&mut self, mouse_event: MouseEvent) {
+        if is_inside(self.layout.chunks_execute[0], mouse_event.column, mouse_event.row) {
+            self.mouse_pos = Button::ButtonAuto(Color::Red);
+            self.execute_select = ExecuteMode::Auto;
+        }
+        else if is_inside(self.layout.chunks_execute[1], mouse_event.column, mouse_event.row) {
+            self.mouse_pos = Button::ButtonAutoDelayed(Color::Red);
+            self.execute_select = ExecuteMode::AutoDelayed;
+        }
+        if is_inside(self.layout.chunks_execute[2], mouse_event.column, mouse_event.row) {
+            self.mouse_pos = Button::ButtonManual(Color::Red);
+            self.execute_select = ExecuteMode::Manual;
+        }
+        if is_inside(self.layout.chunks_execute[3], mouse_event.column, mouse_event.row) {
+            self.mouse_pos = Button::ButtonDisable(Color::Red);
+            self.execute_select = ExecuteMode::Disable;
+        }
     }
 
 
@@ -76,11 +126,7 @@ impl App{
                 self.search_toggle = false;
             },
             KeyCode::Enter => {
-                if self.search_to_services_idx.len() > 0 {
-                    let idx = self.search_to_services_idx[self.search.idx];
-                    let search_selected = self.services_name_cache[idx].clone();
-                    self.services.selected.push(search_selected);
-                }
+                self.save_search_to_services();
                 self.search_toggle = false;
             },
             KeyCode::Backspace => {
@@ -88,20 +134,24 @@ impl App{
                 self.search.selected = self.search_services();
             },
             KeyCode::Up => {
-                self.search.idx = self.search.idx.saturating_sub(1);
-                self.search.list_state.select_previous();
+                self.scroll_up_search();
             },
             KeyCode::Down => {
-                if check_scrollbar_within_bounds(self.search_to_services_idx.len(), self.search.idx) {
-                    self.search.idx = self.search.idx.saturating_add(1);
-                    self.search.list_state.select_next();
-                }
+                self.scroll_down_search();
             },
             KeyCode::Char(c)  => {
                 self.search_string.push(c);
                 self.search.selected = self.search_services();
             },
             _ => {}
+        }
+    }
+
+    fn save_search_to_services(&mut self) {
+        if self.search_to_services_idx.len() > 0 {
+            let idx = self.search_to_services_idx[self.search.idx];
+            let search_selected = self.services_name_cache[idx].clone();
+            self.services.selected.push(search_selected);
         }
     }
     
@@ -139,17 +189,41 @@ impl App{
     fn execute_command(&mut self) {
         match self.execute_select {
             ExecuteMode::Auto => {
-                    self.cmd_output_disable = services::enable_auto(&self.services.code_selected).unwrap_or_else(|e| e);
+                if !self.check_services_selection_empty() {
+                    self.cmd_output_disable = services::enable_auto(&self.services.code_selected)
+                        .unwrap_or_else(|e| e);
+                }
+                else {
+                    self.cmd_output_disable = String::from("No service selected.");
+                }
             }
             ExecuteMode::AutoDelayed => {
-                    self.cmd_output_disable = services::enable_auto_delayed(&self.services.code_selected).unwrap_or_else(|e| e);
+                if !self.check_services_selection_empty() {
+                    self.cmd_output_disable = services::enable_auto_delayed(&self.services.code_selected)
+                        .unwrap_or_else(|e| e);
+                }
+                else {
+                    self.cmd_output_disable = String::from("No service selected.");
+                }
             }
             ExecuteMode::Manual => {
-                    self.cmd_output_disable = services::enable_manual(&self.services.code_selected).unwrap_or_else(|e| e);
-            }
+                if !self.check_services_selection_empty() {
+                    self.cmd_output_disable = services::enable_manual(&self.services.code_selected)
+                        .unwrap_or_else(|e| e);
+                }
+                else {
+                    self.cmd_output_disable = String::from("No service selected.");
+                }            }
             ExecuteMode::Disable => {
-                self.cmd_output_stop = services::stop_services(&self.services.code_selected).unwrap_or_else(|e| e);
-                self.cmd_output_disable = services::disable_services(&self.services.code_selected).unwrap_or_else(|e| e);
+                if !self.check_services_selection_empty() {
+                    self.cmd_output_stop = services::stop_services(&self.services.code_selected)
+                        .unwrap_or_else(|e| e);
+                    self.cmd_output_disable = services::disable_services(&self.services.code_selected)
+                        .unwrap_or_else(|e| e);
+                }
+                else {
+                    self.cmd_output_disable = String::from("No service selected.");
+                }            
             }
             ExecuteMode::Default => {
                 self.cmd_output_disable = String::from("No option selected.");
@@ -164,16 +238,12 @@ impl App{
                 self.exit()
             },
             KeyCode::Up | KeyCode::Char('w') => {
-                self.services.idx = self.services.idx.saturating_sub(1);
-                self.services.list_state.select_previous();
+                self.scroll_up();
             },
             KeyCode::Down | KeyCode::Char('s') => {
-                if check_scrollbar_within_bounds(self.services_name_cache.len(), self.services.idx) {
-                    self.services.idx = self.services.idx.saturating_add(1);
-                    self.services.list_state.select_next();
-                }
+                self.scroll_down();
             },
-            KeyCode::Char('e') | KeyCode::Char('E') => {
+            KeyCode::Char('e') | KeyCode::Char('E') | KeyCode::Enter => {
                 let selection = &self.services_name_cache[self.services.idx].to_string();
                 if !check_dupe(&self.services.selected, selection) {
                     self.services.selected.push((self.services_name_cache[self.services.idx]).to_string());
@@ -188,13 +258,64 @@ impl App{
                 self.search_toggle = true;
                 self.search.selected = self.search_services();
             },
-            KeyCode::Char('m') => {
+            KeyCode::Char('1') => {
+                self.mouse_pos = Button::Button1(Color::Green);
+                self.select_telemetry();
+            },
+            KeyCode::Char('2') => {
+                self.mouse_pos = Button::Button2(Color::Red);
+                self.selection_reset();
+            },            
+            KeyCode::Char('v') | KeyCode::Char('V') => {
                 self.execute_toggle = true;
             },
             _ => {}
         }            
     }
 
+    fn scroll_up(&mut self) {
+        if self.services.idx > 0 {
+            self.services.idx = self.services.idx.saturating_sub(1);
+            self.services.list_state.select_previous();
+        }
+        else {
+            self.services.idx = self.services_name_cache.len() - 1;
+            self.services.list_state.select_last();
+        }
+    }
+
+    fn scroll_down(&mut self) {
+        if check_scrollbar_within_bounds(self.services_name_cache.len(), self.services.idx) {
+            self.services.idx = self.services.idx.saturating_add(1);
+            self.services.list_state.select_next();
+        }
+        else {
+            self.services.idx = 0;
+            self.services.list_state.select_first();
+        }
+    }
+
+    fn scroll_up_search(&mut self) {
+        if self.search.idx > 0 {
+            self.search.idx = self.search.idx.saturating_sub(1);
+            self.search.list_state.select_previous();
+        }
+        else {
+            self.search.idx = self.search.selected.len() - 1;
+            self.search.list_state.select_last();
+        }
+    }
+
+    fn scroll_down_search(&mut self) {
+        if check_scrollbar_within_bounds(self.search.selected.len(), self.search.idx) {
+            self.search.idx = self.search.idx.saturating_add(1);
+            self.search.list_state.select_next();
+        }
+        else {
+            self.search.idx = 0;
+            self.search.list_state.select_first();
+        }
+    }
 
     fn search_services(&mut self) -> Vec<String> {
         self.search.idx = 0;
@@ -212,10 +333,15 @@ impl App{
             .collect()
     }
 
+    fn check_services_selection_empty(&self) -> bool {
+        self.services.selected.len() <= 0
+    }
+
     fn exit(&mut self) {
         self.exit = true;
     }
 }
+
 
 fn check_scrollbar_within_bounds(len: usize, idx: usize) -> bool {
     idx < len -1

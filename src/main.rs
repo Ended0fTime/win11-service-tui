@@ -67,6 +67,7 @@ pub struct LayoutCache {
     chunks_screen: Vec<Rect>,
     chunks_screen_inner: Vec<Rect>,
     chunks_right: Vec<Rect>,
+    chunks_execute: Vec<Rect>,
 }
 
 

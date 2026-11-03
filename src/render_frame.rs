@@ -105,7 +105,7 @@ impl App {
 
     fn render_execute_select(&mut self, frame: &mut Frame) {
         let screen_area = self.layout.screen_size;
-        let usable_layout = calc_layout_execute(screen_area);
+        self.layout.chunks_execute = calc_layout_execute(screen_area);
 
         let mut button_auto = create_button(String::from("Auto"), LIGHT_YELLOW);
         let mut button_auto_delayed = create_button(String::from("Auto (Delayed)"), LIGHT_YELLOW);
@@ -129,16 +129,16 @@ impl App {
             _ => {}
         }
 
-        frame.render_widget(button_auto, usable_layout[0]);
-        frame.render_widget(button_auto_delayed, usable_layout[1]);
-        frame.render_widget(button_manual, usable_layout[2]);
-        frame.render_widget(button_disable, usable_layout[3]);
+        frame.render_widget(button_auto, self.layout.chunks_execute[0]);
+        frame.render_widget(button_auto_delayed, self.layout.chunks_execute[1]);
+        frame.render_widget(button_manual, self.layout.chunks_execute[2]);
+        frame.render_widget(button_disable, self.layout.chunks_execute[3]);
     }
 
     fn render_main(&mut self, frame: &mut Frame) {
         // Outer frames
         let title = Line::from(" Win11 Service Disabler ").fg(LIGHT_YELLOW).italic();
-        let keybind_guide = Line::from("<Q>Exit <E/Enter>Select <R>Remove <F>Find <Shift+Enter>Execute").white().italic().centered();
+        let keybind_guide = Line::from("<Q>Exit <E/Enter>Select <R>Remove <F>Find <V>Execute").white().italic().centered();
         let block_left_upper = Block::bordered()
             .border_set(border::PLAIN)
             .border_style(Style::default().fg(LIGHT_BLUE))
