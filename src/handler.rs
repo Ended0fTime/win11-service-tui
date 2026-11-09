@@ -128,13 +128,16 @@ impl App{
             }
             Some(ExecuteMode::AutoDelayed) => {
                 self.cmd_output_disable = services::enable_auto_delayed(&self.services.code_selected).unwrap_or_else(|e| e);
+                self.update_statuses(&self.services.code_selected.clone());
             }
             Some(ExecuteMode::Manual) => {
                 self.cmd_output_disable = services::enable_manual(&self.services.code_selected).unwrap_or_else(|e| e);
+                self.update_statuses(&self.services.code_selected.clone());
             }
             Some(ExecuteMode::Disable) => {
                 self.cmd_output_stop = services::stop_services(&self.services.code_selected).unwrap_or_else(|e| e);
                 self.cmd_output_disable = services::disable_services(&self.services.code_selected).unwrap_or_else(|e| e);
+                self.update_statuses(&self.services.code_selected.clone());
             }
             None => {
                 self.cmd_output_disable = String::from("No option selected.");

@@ -21,6 +21,7 @@ const CLR_RED: Color = Rgb(237, 14, 14);
 const BTN_TEL: Color = CLR_GREEN;
 const BTN_TEL_ON: Color = CLR_GREEN;
 const BTN_RESET: Color = CLR_RED;
+const ALL_BORDERS: Color = CLR_WHITE;
 
 // Const Values
 const SCREEN_WIDTH_MIN:u16 = 20;
@@ -108,11 +109,11 @@ impl App {
 
         let black_block = Block::new().bg(CLR_BLACK);
         let searchbar_content: String = self.search_string.iter().collect();
-        let too_small_para = Paragraph::new(searchbar_content) 
+        let searchbar = Paragraph::new(searchbar_content) 
             .fg(CLR_WHITE).bold().centered()
             .block(Block::bordered().border_style(Style::default().fg(CLR_WHITE)));
         frame.render_widget(black_block, screen_area);
-        frame.render_widget(too_small_para, usable_layout[0]);
+        frame.render_widget(searchbar, usable_layout[0]);
         frame.render_stateful_widget(search_list, usable_layout[1], &mut self.search.list_state);
 
     }
@@ -155,17 +156,17 @@ impl App {
         let keybind_guide = Line::from("<Q>Exit <E/Enter>Select <R>Remove <F>Find <V>Execute").white().italic().centered();
         let block_left_upper = Block::bordered()
             .border_set(border::PLAIN)
-            .border_style(Style::default().fg(CLR_WHITE))
+            .border_style(Style::default().fg(ALL_BORDERS))
             .title(title)
             .merge_borders(MergeStrategy::Exact);
         let block_left_lower = Block::bordered()
             .border_set(border::PLAIN)
-            .border_style(Style::default().fg(CLR_WHITE))
+            .border_style(Style::default().fg(ALL_BORDERS))
             .merge_borders(MergeStrategy::Exact)
             .title_bottom(keybind_guide);
         let block_right = Block::bordered()
             .border_set(border::PLAIN)
-            .border_style(Style::default().fg(CLR_WHITE))
+            .border_style(Style::default().fg(ALL_BORDERS))
             .merge_borders(MergeStrategy::Exact);
 
         // Content declaration

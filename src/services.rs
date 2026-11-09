@@ -35,32 +35,46 @@ pub fn parse_services_name(services_info_str: &str) -> Vec<String> {
 }
 
 pub fn parse_services_status(services_codes: &[String], services_name_len: usize) -> Vec<String> {
-    let mut vec_output = Vec::with_capacity(services_name_len);
-    for service in services_codes {
-        let output = Command::new("sc")
-            .args(["qc", service])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .expect("Failed to get service status.");
-        let output_str = String::from_utf8_lossy(&output.stdout).into_owned();
-        let state = output_str
-            .lines()
-            .find(|line| line.contains("START_TYPE"))
-            .and_then(|line| line.split_whitespace().last())
-            .unwrap_or("UNKNOWN");
-            
-        vec_output.push(state.to_string()); // 3. Push the parsed state into your vector
-    }
-    vec_output
-}
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", "Get-CimInstance Win32_Service | Select-Object StartMode"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
 
+    let Ok(output) = output else { return Vec::new(); };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Parse the table output from PowerShell
+    stdout
+        .lines()
+        .skip(3) // Skip table headers ("StartMode", "----", etc.)
+        .map(|line| line.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
 pub fn update_service_status(service: &String) -> String {
     let output = Command::new("sc")
         .args(["qc", service])
         .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .expect("Failed to get service status.");
-    String::from_utf8_lossy(&output.stdout).into_owned()
+        .output();
+
+    let Ok(output) = output else { return "Unknown".to_string(); };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    let raw_token = stdout
+        .lines()
+        .find(|line| line.contains("START_TYPE"))
+        .and_then(|line| line.split_whitespace().last())
+        .unwrap_or("UNKNOWN");
+
+    match raw_token.to_uppercase().as_str() {
+        "AUTO_START" => "Automatic",
+        "(DELAYED)" => "Auto (Delayed)",
+        "DEMAND_START" => "Manual",
+        "DISABLED" => "Disabled",
+        "BOOT_START" => "Boot",
+        "SYSTEM_START" => "System",
+        _ => "Unknown",
+    }.to_string()
 }
 
 pub fn get_services_desc() -> Vec<String> {
