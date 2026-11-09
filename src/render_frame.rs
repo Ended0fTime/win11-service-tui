@@ -1,8 +1,8 @@
-use crate::{App, Button};
+use crate::{App, Button, UiMode};
 use ratatui::{
     Frame, 
     layout::{Alignment, Constraint, Spacing, Layout, Rect}, 
-    style::{Color, Style, Stylize}, 
+    style::{Color, Color::{Rgb}, Style, Stylize}, 
     symbols::{border, merge::MergeStrategy}, text::{Line, Span}, 
     widgets::{Block, Borders, Padding, 
         List, Paragraph, Wrap, Scrollbar, ScrollbarOrientation},
@@ -10,9 +10,17 @@ use ratatui::{
 
 
 // Colour declaration
-pub const LIGHT_YELLOW: Color = Color::Rgb(255, 255, 24);
-pub const LIGHT_BLUE: Color = Color::Rgb(25, 150, 255);
-pub const DARK_BLUE: Color = Color::Rgb(3, 12, 43);
+const CLR_LIGHT_YELLOW: Color = Rgb(255, 238, 0);
+const CLR_LIGHT_BLUE: Color = Rgb(25, 226, 252);
+const CLR_DARK_BLUE: Color = Rgb(14, 15, 97);
+const CLR_WHITE: Color = Rgb(255, 255, 255);
+const CLR_BLACK: Color = Rgb(0, 0, 0);
+const CLR_GREEN: Color = Rgb(38, 255, 38);
+const CLR_RED: Color = Rgb(237, 14, 14);
+
+const BTN_TEL: Color = CLR_GREEN;
+const BTN_TEL_ON: Color = CLR_GREEN;
+const BTN_RESET: Color = CLR_RED;
 
 // Const Values
 const SCREEN_WIDTH_MIN:u16 = 20;
@@ -37,9 +45,10 @@ impl App {
             Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_left_upper[1]), 
             Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_left_upper[2]), 
             Block::bordered().borders(Borders::TOP | Borders::BOTTOM | Borders::RIGHT).inner(chunks_left_upper[3]), 
-            Block::bordered().inner(chunks_left_lower[0]), 
-            Block::bordered().inner(chunks_left_lower[1]),
+            Block::bordered().inner(chunks_left_lower[1]), 
             Block::bordered().inner(chunks_left_lower[2]),
+            Block::bordered().inner(chunks_left_lower[3]),
+            Block::bordered().inner(chunks_left_lower[4]),
         ];
         self.layout.chunks_right = chunks_right;
     }
@@ -51,13 +60,18 @@ impl App {
         if screen_width_check || screen_height_check {
             self.render_too_small(frame);
         }
-        else if self.search_toggle {
-                self.render_search(frame);
-            }
         else {
-            self.render_main(frame);
-            if self.execute_toggle {
-                self.render_execute_select(frame);
+            match self.ui_state {
+                UiMode::Search => {
+                    self.render_search(frame);
+                }
+                UiMode::Execute => {
+                    self.render_main(frame);
+                    self.render_execute_select(frame);
+                }
+                UiMode::Main => {
+                    self.render_main(frame);
+                }
             }
         }
     }
@@ -70,9 +84,9 @@ impl App {
             Constraint::Fill(1),
         ]).split(screen_area);
 
-        let black_block = Block::new().bg(Color::Black);
+        let black_block = Block::new().bg(CLR_BLACK);
         let too_small_para = Paragraph::new("terminal is too small. Please enlarge")
-            .fg(LIGHT_YELLOW)
+            .fg(CLR_WHITE)
             .bold()
             .centered();
         frame.render_widget(black_block, screen_area);
@@ -86,17 +100,17 @@ impl App {
         let search_list = List::new(self.search.selected.clone())
             .block(Block::new()
             .padding(Padding{left: 0, right: 0, top: 1, bottom: 1}))
-            .highlight_style(Style::default().bg(LIGHT_YELLOW).fg(DARK_BLUE).bold());
+            .highlight_style(Style::default().bg(CLR_WHITE).fg(CLR_WHITE).bold());
 
         self.search.scroll_state = self.search.scroll_state
             .position(self.search.idx)
             .content_length(self.search.count_num.len());
 
-        let black_block = Block::new().bg(Color::Black);
+        let black_block = Block::new().bg(CLR_BLACK);
         let searchbar_content: String = self.search_string.iter().collect();
         let too_small_para = Paragraph::new(searchbar_content) 
-            .fg(Color::default()).bold().centered()
-            .block(Block::bordered().border_style(Style::default().fg(LIGHT_YELLOW)));
+            .fg(CLR_WHITE).bold().centered()
+            .block(Block::bordered().border_style(Style::default().fg(CLR_WHITE)));
         frame.render_widget(black_block, screen_area);
         frame.render_widget(too_small_para, usable_layout[0]);
         frame.render_stateful_widget(search_list, usable_layout[1], &mut self.search.list_state);
@@ -107,24 +121,24 @@ impl App {
         let screen_area = self.layout.screen_size;
         self.layout.chunks_execute = calc_layout_execute(screen_area);
 
-        let mut button_auto = create_button(String::from("Auto"), LIGHT_YELLOW);
-        let mut button_auto_delayed = create_button(String::from("Auto (Delayed)"), LIGHT_YELLOW);
-        let mut button_manual = create_button(String::from("Manually Triggered"), LIGHT_YELLOW);
-        let mut button_disable = create_button(String::from("Disable"), LIGHT_YELLOW);
+        let mut button_auto = create_button(String::from("Auto"), CLR_WHITE);
+        let mut button_auto_delayed = create_button(String::from("Auto (Delayed)"), CLR_WHITE);
+        let mut button_manual = create_button(String::from("Manually Triggered"), CLR_WHITE);
+        let mut button_disable = create_button(String::from("Disable"), CLR_WHITE);
 
         // Color management based on events
         match self.mouse_pos {
-            Button::ButtonAuto(content_color) => {
-                button_auto = create_button("Auto".to_string(), content_color).bold();
+            Some(Button::ButtonAuto) => {
+                button_auto = create_button("Auto".to_string(), CLR_WHITE).bold();
             }
-            Button::ButtonAutoDelayed(content_color) => {
-                button_auto_delayed = create_button("Auto (Delayed)".to_string(), content_color).bold();
+            Some(Button::ButtonAutoDelayed) => {
+                button_auto_delayed = create_button("Auto (Delayed)".to_string(), CLR_WHITE).bold();
             }
-            Button::ButtonManual(content_color) => {
-                button_manual = create_button("Manually Triggered".to_string(), content_color).bold();
+            Some(Button::ButtonManual) => {
+                button_manual = create_button("Manually Triggered".to_string(), CLR_WHITE).bold();
             }
-            Button::ButtonDisable(content_color) => {
-                button_disable = create_button("Disable".to_string(), content_color).bold();
+            Some(Button::ButtonDisable) => {
+                button_disable = create_button("Disable".to_string(), CLR_WHITE).bold();
             }
             _ => {}
         }
@@ -137,32 +151,33 @@ impl App {
 
     fn render_main(&mut self, frame: &mut Frame) {
         // Outer frames
-        let title = Line::from(" Win11 Service Disabler ").fg(LIGHT_YELLOW).italic();
+        let title = Line::from(" Win11 Service Disabler ").fg(CLR_WHITE).italic();
         let keybind_guide = Line::from("<Q>Exit <E/Enter>Select <R>Remove <F>Find <V>Execute").white().italic().centered();
         let block_left_upper = Block::bordered()
             .border_set(border::PLAIN)
-            .border_style(Style::default().fg(LIGHT_BLUE))
+            .border_style(Style::default().fg(CLR_WHITE))
             .title(title)
             .merge_borders(MergeStrategy::Exact);
         let block_left_lower = Block::bordered()
             .border_set(border::PLAIN)
-            .border_style(Style::default().fg(LIGHT_BLUE))
+            .border_style(Style::default().fg(CLR_WHITE))
             .merge_borders(MergeStrategy::Exact)
             .title_bottom(keybind_guide);
         let block_right = Block::bordered()
             .border_set(border::PLAIN)
-            .border_style(Style::default().fg(LIGHT_BLUE))
+            .border_style(Style::default().fg(CLR_WHITE))
             .merge_borders(MergeStrategy::Exact);
 
         // Content declaration
         let output_serv_title: &Vec<String> = &self.services_name_cache;
+        let output_serv_status: &Vec<String> = &self.services_status_cache;
         let output_serv_short: &Vec<String> = &self.services_name_short_cache;
         let output_serv_desc: &Vec<String> = &self.services_desc_cache;
 
         let list_services = List::new(output_serv_title.clone())
             .block(Block::new()
             .padding(Padding{left: 0, right: 0, top: 1, bottom: 1}))
-            .highlight_style(Style::default().bg(LIGHT_YELLOW).fg(DARK_BLUE).bold());
+            .highlight_style(Style::default().bg(CLR_WHITE).fg(CLR_BLACK).bold());
         let list_services_count = List::new(self.services.count_num.clone())
             .block(Block::new()
             .padding(Padding{left: 0, right: 0, top: 1, bottom: 1}));
@@ -175,15 +190,17 @@ impl App {
             .end_symbol(Some("▼"));
 
         let defaulterr = String::from("No description given.");
-        let serv_title_short = output_serv_short.get(self.services.idx).unwrap_or(&defaulterr).clone();
+        let serv_status = output_serv_status.get(self.services.idx).unwrap_or(&defaulterr);
+        let serv_title_short = output_serv_short.get(self.services.idx).unwrap_or(&defaulterr);
         let serv_desc = output_serv_desc.get(self.services.idx).unwrap_or(&defaulterr);
 
-        let para_details_title = Paragraph::new(
-            Line::from(serv_title_short).bold())
-            .block(Block::new().padding(Padding::new(3, 3, 1, 0)));        
+
+        let para_details_status = Line::from(vec![Span::raw("   "), Span::raw(serv_status)]);
+        let para_details_title = Line::from(vec![Span::raw("   "), Span::raw(serv_title_short)]);
         let para_details_desc = Paragraph::new(
-            Span::styled(serv_desc, Style::default().green()))
-            .block(Block::new().padding(Padding::new(3, 3, 0, 0)))
+            Span::styled(serv_desc, Style::default().fg(CLR_WHITE)))
+            .block(Block::new()
+            .padding(Padding::new(3, 3, 0, 0)))
             .wrap(Wrap {trim: true}); 
 
         let cmd_out = Paragraph::new(vec![
@@ -195,20 +212,20 @@ impl App {
 
         let content_header_right = Paragraph::new(
             Line::from("Select batch of services to disable.")
-                .fg(LIGHT_YELLOW).bold().italic())
+                .fg(CLR_WHITE).bold().italic())
             .wrap(Wrap {trim: true})
             .centered()
             .block(Block::new().padding(Padding::new(1, 1, 4, 0)));
-        let mut button1 = create_button("Telemetry".to_string(), Color::White);
-        let mut button2 = create_button("Clear selection".to_string(), Color::White);
+        let mut button1 = create_button("Telemetry".to_string(), BTN_TEL);
+        let mut button2 = create_button("Clear selection".to_string(), BTN_RESET);
 
         // Color management based on events
         match self.mouse_pos {
-            Button::Button1(content_color) => {
-                button1 = create_button("Telemetry".to_string(), content_color).bold();
+            Some(Button::Button1) => {
+                button1 = create_button("Telemetry".to_string(), BTN_TEL_ON).bold();
             }
-            Button::Button2(content_color) => {
-                button2 = create_button("Clear selection".to_string(), content_color).bold();
+            Some(Button::Button2) => {
+                button2 = create_button("Clear selection".to_string(), BTN_RESET).bold();
             }
             _ => {}
         }
@@ -219,7 +236,7 @@ impl App {
         let list_selected= List::new(self.services.selected.clone())
             .block(Block::new()
             .padding(Padding{left: 2, right: 0, top: 0, bottom: 0}))
-            .highlight_style(Style::default().bg(LIGHT_YELLOW).fg(DARK_BLUE).bold());
+            .highlight_style(Style::default().bg(CLR_WHITE).fg(CLR_WHITE).bold());
 
         // Rendering
         frame.render_widget(block_right,self.layout.chunks_screen[0]);
@@ -237,9 +254,10 @@ impl App {
         frame.render_widget(list_selected_title,self.layout.chunks_right[3]);
         frame.render_widget(list_selected,self.layout.chunks_right[4]);
 
-        frame.render_widget(para_details_title,self.layout.chunks_screen_inner[4]);
-        frame.render_widget(para_details_desc,self.layout.chunks_screen_inner[5]);
-        frame.render_widget(cmd_out, self.layout.chunks_screen_inner[6]);
+        frame.render_widget(para_details_status, self.layout.chunks_screen_inner[4]);
+        frame.render_widget(para_details_title,self.layout.chunks_screen_inner[5]);
+        frame.render_widget(para_details_desc,self.layout.chunks_screen_inner[6]);
+        frame.render_widget(cmd_out, self.layout.chunks_screen_inner[7]);
     }
 }
 
@@ -247,17 +265,17 @@ impl App {
 fn create_button(content: String, content_color:Color) -> Paragraph<'static>{
     Paragraph::new(
         Line::from(vec![content.fg(content_color).italic()])
-        .centered()).block(Block::bordered().border_style(Style::default().fg(LIGHT_BLUE))
+        .centered()).block(Block::bordered().border_style(Style::default().fg(CLR_WHITE))
     )
 }
 
-pub fn cache_service_numbering(vec_len: usize)-> Vec<Line<'static>> {
+pub fn cache_list_numbering(vec_len: usize)-> Vec<Line<'static>> {
     let mut serv_count_num: Vec<Line> = Vec::with_capacity(vec_len);
     for i in 1..=vec_len {
         let line = Line::from(vec![i.to_string().into(), ". ".into()]).alignment(Alignment::Right);
         serv_count_num.push(line);
     }
-    return serv_count_num;
+    serv_count_num
 }
 
 fn calc_layout_main_horizontal(area: Rect) -> Vec<Rect> {
@@ -286,7 +304,9 @@ fn calc_layout_left_upper(chunk: Rect) -> Vec<Rect> {
 
 fn calc_layout_left_lower(chunk: Rect) -> Vec<Rect> {
     Layout::vertical([
-        Constraint::Length(4),
+        Constraint::Length(1),
+        Constraint::Length(3),
+        Constraint::Length(3),
         Constraint::Fill(1),
         Constraint::Fill(1),
     ]).split(chunk).to_vec()
@@ -309,13 +329,13 @@ fn calc_layout_right(chunk: Rect) -> Vec<Rect> {
             Constraint::Ratio(1,5),
         ]).split(chunks_right[i]));
     }
-    return vec![
+    vec![
         chunks_right[0], 
         chunks_button[0][1], 
         chunks_button[1][1], 
         chunks_right[3], 
         chunks_right[4]
-    ];
+    ]
 }
 
 fn calc_layout_search(chunk: Rect) -> Vec<Rect> {
@@ -333,7 +353,7 @@ fn calc_layout_search(chunk: Rect) -> Vec<Rect> {
             Constraint::Ratio(1, 8),
         ]).split(vertical_layout[i]).to_vec());
     }
-    return vec![horizontal_layout[0][1], horizontal_layout[1][1]];
+    vec![horizontal_layout[0][1], horizontal_layout[1][1]]
 }
 
 fn calc_layout_execute(chunk: Rect) -> Vec<Rect> {
@@ -351,5 +371,5 @@ fn calc_layout_execute(chunk: Rect) -> Vec<Rect> {
         Constraint::Ratio(1, 20),
         Constraint::Ratio(1, 3),
     ]).split(vertical_layout[1]).to_vec();
-    return vec![horizontal_layout[1], horizontal_layout[2], horizontal_layout[3], horizontal_layout[4]];
+    vec![horizontal_layout[1], horizontal_layout[2], horizontal_layout[3], horizontal_layout[4]]
 }
