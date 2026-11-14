@@ -1,57 +1,46 @@
 use std::process::Command;
 use std::os::windows::process::CommandExt;
 
+#[derive(Default)]
+pub struct ServiceInfo {
+    pub names: String,
+    pub codes: String,
+    pub start_type: String,
+    pub desc: String,
+}
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;   // Windows API flag
 
 
-pub fn get_services_info() -> String {
-    let output = Command::new("sc")
-        .args(["query", "state=all"])
+pub fn get_service_metadata() -> Vec<ServiceInfo> {
+    let mut services = Vec::new();
+    let script = "Get-CimInstance Win32_Service | ForEach-Object { $_.DisplayName + ':::' + $_.Name + ':::' + $_.StartMode + ':::' + $_.Description }";
+
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", script])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .expect("Failed to get service codes.");
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
+        .expect("Failed to get service metadata");
 
-pub fn parse_services_name_short(services_info_str: &str) -> Vec<String> {
-    services_info_str
-        .lines()
-        .filter(|line| line.contains("SERVICE_NAME:"))
-        .map(|line| {
-            line.replace("SERVICE_NAME:", "").trim().to_string()
-        })
-        .collect()
-}
-
-pub fn parse_services_name(services_info_str: &str) -> Vec<String> {
-    services_info_str
-        .lines()
-        .filter(|line| line.contains("DISPLAY_NAME:"))
-        .map(|line| {
-            line.replace("DISPLAY_NAME:", "").trim().to_string()
-        })
-        .collect()
-}
-
-pub fn parse_services_status(services_codes: &[String], services_name_len: usize) -> Vec<String> {
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", "Get-CimInstance Win32_Service | Select-Object StartMode"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    let Ok(output) = output else { return Vec::new(); };
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // Parse the table output from PowerShell
-    stdout
-        .lines()
-        .skip(3) // Skip table headers ("StartMode", "----", etc.)
-        .map(|line| line.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect()
+    for line in stdout.lines() {
+        // splitn(5, ...) ensures descriptions containing ':::' won't break earlier fields
+        let parts: Vec<&str> = line.splitn(5, ":::").collect();
+        if parts.len() >= 4 {
+            services.push(ServiceInfo {
+                names: parts[0].trim().to_string(),
+                codes: parts[1].trim().to_string(),
+                start_type: parts[2].trim().to_string(),
+                desc: if parts.len() == 4 { parts[3].trim().to_string() } else { "No description given".to_string() },
+            });
+        }
+    }
+    services
+
 }
-pub fn update_service_status(service: &String) -> String {
+
+pub fn update_service_start_type(service: &String) -> String {
     let output = Command::new("sc")
         .args(["qc", service])
         .creation_flags(CREATE_NO_WINDOW)
@@ -81,15 +70,16 @@ pub fn get_services_desc() -> Vec<String> {
     let services_desc = Command::new("powershell")
         .args([
             "-Command",
-            "Get-CimInstance Win32_Service | Select-Object -ExpandProperty Description"
+            "Get-CimInstance Win32_Service | ForEach-Object { $_.Description }"
         ])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .expect("get service failed");
     let output = services_desc.stdout;
-    String::from_utf8_lossy(&output).into_owned().lines()
-    .map(|line| {line.trim().to_string()     
-    }).collect()
+    String::from_utf8_lossy(&output)
+    .lines()
+    .map(|line| {line.trim().to_string()})
+    .collect()
 }
 
 

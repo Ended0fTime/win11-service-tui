@@ -1,4 +1,4 @@
-use crate::{App, Button, ExecuteMode, UiMode, services::{self, get_services_desc, parse_services_status}};
+use crate::{App, Button, ExecuteMode, UiMode, services};
 use ratatui::layout::{Rect, Position};
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use color_eyre::eyre::{Context, Result}; 
@@ -148,7 +148,7 @@ impl App{
 
     fn update_statuses(&mut self, code_selected: &[String]) {
         for (i, code) in code_selected.iter().enumerate() {
-            self.services_status_cache[self.services.idx_selected[i]] = services::update_service_status(code);
+            self.service_info[self.services.idx_selected[i]].start_type = services::update_service_start_type(code);
         }
     }
     
@@ -164,10 +164,10 @@ impl App{
                 self.scroll_down();
             },
             KeyCode::Char('e') | KeyCode::Char('E') | KeyCode::Enter => {
-                let selection = &self.services_name_cache[self.services.idx].to_string();
+                let selection = &self.service_info[self.services.idx].names.to_string();
                 if !check_dupe(&self.services.selected, selection) {
-                    self.services.selected.push((self.services_name_cache[self.services.idx]).to_string());
-                    self.services.code_selected.push((self.services_name_short_cache[self.services.idx]).to_string());
+                    self.services.selected.push((self.service_info[self.services.idx].names).to_string());
+                    self.services.code_selected.push((self.service_info[self.services.idx].codes).to_string());
                     self.services.idx_selected.push(self.services.idx);
                 }
             },
@@ -294,13 +294,13 @@ impl App{
             self.services.list_state.select_previous();
         }
         else {
-            self.services.idx = self.services_name_cache.len() - 1;
+            self.services.idx = self.service_info.len() - 1;
             self.services.list_state.select_last();
         }
     }
 
     fn scroll_down(&mut self) {
-        if check_scrollbar_within_bounds(self.services_name_cache.len(), self.services.idx) {
+        if check_scrollbar_within_bounds(self.service_info.len(), self.services.idx) {
             self.services.idx = self.services.idx.saturating_add(1);
             self.services.list_state.select_next();
         }
@@ -336,16 +336,14 @@ impl App{
         self.search.idx = 0;
         self.search.list_state.select(Some(0));
         let query_lower: String = self.search_string.iter().collect();
-        let services_name = self.services_name_cache.clone();
-         self.search_to_services_idx = services_name.iter()
+        let (idx, names) = self.service_info
+            .iter()
             .enumerate()
-            .filter(|(_, s)| s.to_lowercase().contains(&query_lower))
-            .map(|(idx, _)| idx)
-            .collect();
-        services_name.iter()
-            .filter(|s| s.to_lowercase().contains(&query_lower))
-            .cloned()
-            .collect()
+            .filter(|(_, serv)| serv.names.to_lowercase().contains(&query_lower))
+            .map(|(idx, serv)| (idx, serv.names.clone()))
+            .unzip();
+        self.search_to_services_idx = idx;
+        names
     }
 
     fn exit(&mut self) {
@@ -355,7 +353,7 @@ impl App{
 
 
 fn check_scrollbar_within_bounds(len: usize, idx: usize) -> bool {
-    idx < len -1
+    idx < len -1    
 }
 
 fn is_inside(rect: Rect, col: u16, row: u16) -> bool {

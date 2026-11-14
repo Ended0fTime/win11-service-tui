@@ -2,6 +2,8 @@ mod handler;
 mod render_frame;
 mod services;
 
+use services::ServiceInfo;
+
 use std::io::stdout;
 
 use crossterm::{event::{DisableMouseCapture, EnableMouseCapture}, execute};
@@ -30,10 +32,7 @@ fn main() -> Result<()> {
 #[derive(Default)]
 pub struct App {
     layout: LayoutCache,
-    services_name_cache: Vec<String>,
-    services_name_short_cache: Vec<String>,
-    services_status_cache: Vec<String>,
-    services_desc_cache: Vec<String>,
+    service_info: Vec<ServiceInfo>,
     services: ScrollbarList,
     search: ScrollbarList,
     search_string: Vec<char>,
@@ -97,21 +96,17 @@ impl App {
         self.new();
         while !self.exit {
             let screen_area = get_term_size(terminal);
-            self.cache_layout(screen_area);                              // Calculate and cache layout
-            terminal.draw(|frame| self.render_frame(frame))?;   // rendering
-            self.handle_events().wrap_err("handle events failed")?;           // event handling (inputs)
+            self.cache_layout(screen_area);
+            terminal.draw(|frame| self.render_frame(frame))?;
+            self.handle_events().wrap_err("handle events failed")?;
         }
         Ok(())
     }
 
     fn new(&mut self) {
         self.services.list_state.select(Some(0));
-        let cmd_output = services::get_services_info();
-        self.services_name_cache = services::parse_services_name(&cmd_output);
-        self.services_name_short_cache = services::parse_services_name_short(&cmd_output);
-        self.services_status_cache = services::parse_services_status(&self.services_name_short_cache, self.services_name_cache.len());
-        self.services_desc_cache = services::get_services_desc();
-        self.services.count_num = render_frame::cache_list_numbering(self.services_name_short_cache.len());
+        self.service_info = services::get_service_metadata();
+        self.services.count_num = render_frame::cache_list_numbering(self.service_info.len());
     }
 }
 
