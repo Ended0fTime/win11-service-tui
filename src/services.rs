@@ -66,23 +66,6 @@ pub fn update_service_start_type(service: &String) -> String {
     }.to_string()
 }
 
-pub fn get_services_desc() -> Vec<String> {
-    let services_desc = Command::new("powershell")
-        .args([
-            "-Command",
-            "Get-CimInstance Win32_Service | ForEach-Object { $_.Description }"
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .expect("get service failed");
-    let output = services_desc.stdout;
-    String::from_utf8_lossy(&output)
-    .lines()
-    .map(|line| {line.trim().to_string()})
-    .collect()
-}
-
-
 pub fn stop_services(services_codes: &[String]) -> Result<String, String> {
     for (i, code) in services_codes.iter().enumerate() {
         let output_stop = Command::new("sc")

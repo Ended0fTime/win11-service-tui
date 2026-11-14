@@ -1,6 +1,11 @@
 use crate::{App, Button, UiMode};
 use ratatui::{
-    Frame, layout::{Alignment, Constraint, Layout, Rect, Spacing}, macros::horizontal, style::{Color::{self, Rgb}, Style, Stylize}, symbols::{border, merge::MergeStrategy}, text::{Line, Span}, widgets::{Block, Borders, List, Padding, Paragraph, Scrollbar, ScrollbarOrientation, Wrap},
+    Frame, 
+    layout::{Alignment, Constraint, Layout, Rect, Spacing}, 
+    style::{Color::{self, Rgb}, Style, Stylize}, 
+    symbols::{border, merge::MergeStrategy}, 
+    text::{Line, Span}, 
+    widgets::{Block, Borders, List, Padding, Paragraph, Scrollbar, ScrollbarOrientation, Wrap},
 };
 
 
@@ -155,7 +160,7 @@ impl App {
 
     fn render_main(&mut self, frame: &mut Frame) {
         // Outer frames
-        let title = Line::from(" Win11 Service Disabler ").fg(CLR_WHITE).italic();
+        let title = Line::from(" Win11 Service TUI ").fg(CLR_WHITE).italic();
         let keybind_guide = Line::from(" <Q>Exit <E/Enter>Select <R>Remove <F>Find <V>Execute ").fg(CLR_WHITE).italic().centered();
         let block_left_upper = Block::bordered()
             .border_set(border::PLAIN)
