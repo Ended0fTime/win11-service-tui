@@ -6,6 +6,7 @@ pub struct ServiceInfo {
     pub names: String,
     pub codes: String,
     pub start_type: String,
+    pub status: String,
     pub desc: String,
 }
 
@@ -14,7 +15,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;   // Windows API flag
 
 pub fn get_service_metadata() -> Vec<ServiceInfo> {
     let mut services = Vec::new();
-    let script = "Get-CimInstance Win32_Service | ForEach-Object { $_.DisplayName + ':::' + $_.Name + ':::' + $_.StartMode + ':::' + $_.Description }";
+    let script = "Get-CimInstance Win32_Service | ForEach-Object { $_.DisplayName + ':::' + $_.Name + ':::' + $_.StartMode+ ':::' + $_.State + ':::' + $_.Description }";
 
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", script])
@@ -32,7 +33,8 @@ pub fn get_service_metadata() -> Vec<ServiceInfo> {
                 names: parts[0].trim().to_string(),
                 codes: parts[1].trim().to_string(),
                 start_type: parts[2].trim().to_string(),
-                desc: if parts.len() == 4 { parts[3].trim().to_string() } else { "No description given".to_string() },
+                status: parts[3].trim().to_string(),
+                desc: if parts.len() == 4 { parts[4].trim().to_string() } else { "No description given".to_string() },
             });
         }
     }

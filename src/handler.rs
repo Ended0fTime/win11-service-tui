@@ -86,7 +86,7 @@ impl App{
     
     fn key_event_execute(&mut self, key_event: KeyEvent) {
         match key_event.code {
-            KeyCode::Esc => {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
                 self.ui_state = UiMode::Main;
             },
             KeyCode::Enter => {
