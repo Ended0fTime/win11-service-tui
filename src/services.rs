@@ -32,9 +32,9 @@ pub fn get_service_metadata() -> Vec<ServiceInfo> {
             services.push(ServiceInfo {
                 names: parts[0].trim().to_string(),
                 codes: parts[1].trim().to_string(),
-                start_type: parts[2].trim().to_string(),
-                status: parts[3].trim().to_string(),
-                desc: if parts.len() == 4 { parts[4].trim().to_string() } else { "No description given".to_string() },
+                start_type: format!(" {}", parts[2].trim().to_string()),
+                status: format!(" {}", parts[3].trim().to_string()),
+                desc: if parts.len() == 5 { parts[4].trim().to_string() } else { "No description given".to_string() },
             });
         }
     }

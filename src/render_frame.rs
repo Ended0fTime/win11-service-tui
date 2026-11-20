@@ -54,11 +54,11 @@ impl App {
             Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_left_upper[1]), 
             Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_left_upper[2]), 
             Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_left_upper[3]), 
-            Block::bordered().borders(Borders::TOP | Borders::BOTTOM | Borders::RIGHT).inner(chunks_left_upper[4]), 
+            Block::bordered().borders(Borders::TOP | Borders::BOTTOM).inner(chunks_left_upper[4]), 
+            Block::bordered().borders(Borders::TOP | Borders::BOTTOM | Borders::RIGHT).inner(chunks_left_upper[5]), 
             Block::bordered().inner(chunks_left_lower[0]), 
             Block::bordered().inner(chunks_left_lower[1]),
             Block::bordered().inner(chunks_left_lower[2]),
-            Block::bordered().inner(chunks_left_lower[3]),
         ];
         self.layout.chunks_right = chunks_right;
     }
@@ -196,6 +196,10 @@ impl App {
             .block(Block::new()
             .padding(Padding{left: 0, right: 0, top: 1, bottom: 1}))
             .highlight_style(Style::default().bg(CLR_LIGHT_YELLOW).fg(CLR_BLACK).bold());
+        let list_status = List::new(output_serv_status.clone())
+            .block(Block::new()
+            .padding(Padding{left: 0, right: 0, top: 1, bottom: 1}))
+            .highlight_style(Style::default().bg(CLR_LIGHT_YELLOW).fg(CLR_BLACK).bold());
         self.services.scroll_state = self.services.scroll_state
             .position(self.services.idx)
             .content_length(self.services.count_num.len());
@@ -205,14 +209,13 @@ impl App {
             .end_symbol(Some("▼"));
 
         let defaulterr = String::from("No info given.");
-        let serv_status = output_serv_status.get(self.services.idx).unwrap_or(&defaulterr);
         let serv_title_short = output_serv_short.get(self.services.idx).unwrap_or(&defaulterr);
         let serv_desc = output_serv_desc.get(self.services.idx).unwrap_or(&defaulterr);
 
-
-        let para_details_start_type = Line::from(vec![Span::raw(" "), Span::raw(serv_status)])
-            .fg(CLR_BLACK).bg(CLR_LIGHT_BLUE);
-        let para_details_title = Line::from(vec![Span::raw(serv_title_short)]);
+        let para_details_title = Line::from(format!(" {} ", serv_title_short))
+            .fg(CLR_BLACK)
+            .bg(CLR_LIGHT_BLUE)
+            .bold();
         let para_details_desc = Paragraph::new(
             Span::styled(serv_desc, Style::default().fg(CLR_WHITE)))
             .wrap(Wrap {trim: true}); 
@@ -263,12 +266,12 @@ impl App {
         frame.render_stateful_widget(list_services_count,self.layout.chunks_screen_inner[1], &mut self.services.list_state);
         frame.render_stateful_widget(list_services,self.layout.chunks_screen_inner[2], &mut self.services.list_state);
         frame.render_stateful_widget(list_start_type,self.layout.chunks_screen_inner[3], &mut self.services.list_state);
-        frame.render_stateful_widget(scrollbar, self.layout.chunks_screen_inner[4], &mut self.services.scroll_state);
+        frame.render_stateful_widget(list_status,self.layout.chunks_screen_inner[4], &mut self.services.list_state);
+        frame.render_stateful_widget(scrollbar, self.layout.chunks_screen_inner[5], &mut self.services.scroll_state);
 
         frame.render_widget(list_selected_title,self.layout.chunks_right[3]);
         frame.render_widget(list_selected,self.layout.chunks_right[4]);
 
-        frame.render_widget(para_details_start_type, self.layout.chunks_screen_inner[5]);
         frame.render_widget(para_details_title,self.layout.chunks_screen_inner[6]);
         frame.render_widget(para_details_desc,self.layout.chunks_screen_inner[7]);
         frame.render_widget(cmd_out, self.layout.chunks_screen_inner[8]);
@@ -310,8 +313,9 @@ fn calc_layout_left_upper(chunk: Rect) -> Vec<Rect> {
     Layout::horizontal([
         Constraint::Ratio(1, 20),   //margin
         Constraint::Length(5),
-        Constraint::Fill(3),
-        Constraint::Fill(1),
+        Constraint::Ratio(6, 10),
+        Constraint::Ratio(2, 10),
+        Constraint::Ratio(2, 10),
         Constraint::Length(3),
         Constraint::Length(2),      //margin
     ]).split(chunk).to_vec()
@@ -321,24 +325,18 @@ fn calc_layout_left_lower(chunk: Rect) -> Vec<Rect> {
     let vertical_layout = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(3),
-        Constraint::Length(3),
         Constraint::Fill(1),
         Constraint::Fill(1),
     ]).split(chunk);
-    let mut horizontal_layout = Vec::with_capacity(5);
-    horizontal_layout.push(Layout::horizontal([
-        Constraint::Length(3),
-        Constraint::Length(15),
-        Constraint::Fill(1),
-    ]).split(vertical_layout[1]).to_vec());
-    for i in 2..=4 {
+    let mut horizontal_layout = Vec::with_capacity(4);
+    for i in 1..=3 {
         horizontal_layout.push(Layout::horizontal([
             Constraint::Length(3),
             Constraint::Fill(1),
             Constraint::Length(3)
         ]).split(vertical_layout[i]).to_vec());
     }
-    vec![horizontal_layout[0][1], horizontal_layout[1][1], horizontal_layout[2][1], horizontal_layout[3][1]]
+    vec![horizontal_layout[0][1], horizontal_layout[1][1], horizontal_layout[2][1]]
 }
 
 
