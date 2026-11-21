@@ -214,7 +214,7 @@ impl App {
 
         let para_details_title = Line::from(format!(" {} ", serv_title_short))
             .fg(CLR_BLACK)
-            .bg(CLR_LIGHT_BLUE)
+            .bg(CLR_WHITE)
             .bold();
         let para_details_desc = Paragraph::new(
             Span::styled(serv_desc, Style::default().fg(CLR_WHITE)))

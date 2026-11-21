@@ -1,4 +1,4 @@
-use crate::{App, Button, ExecuteMode, UiMode, services};
+use crate::{App, Button, ExecuteMode, UiMode, services::{self, ServiceInfo}};
 use ratatui::layout::{Rect, Position};
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use color_eyre::eyre::{Context, Result}; 
@@ -157,10 +157,10 @@ impl App{
             KeyCode::Char('q') | KeyCode::Char('Q') => {
                 self.exit()
             },
-            KeyCode::Up | KeyCode::Char('w') => {
+            KeyCode::Up => {
                 self.scroll_up();
             },
-            KeyCode::Down | KeyCode::Char('s') => {
+            KeyCode::Down => {
                 self.scroll_down();
             },
             KeyCode::Char('e') | KeyCode::Char('E') | KeyCode::Enter => {
@@ -191,8 +191,17 @@ impl App{
             KeyCode::Char('v') | KeyCode::Char('V') => {
                 self.ui_state = UiMode::Execute;
             },
-            _ => {}
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                self.service_info.sort_unstable();
+            },            
+            KeyCode::Char('s') | KeyCode::Char('S') => {
+                self.service_info.sort_unstable();
+            },            _ => {}
         }            
+    }
+
+    fn sort_service_start_type(&mut self) {
+        self.service_info.sort_unstable();
     }
 
 

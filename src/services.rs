@@ -1,7 +1,7 @@
 use std::process::Command;
 use std::os::windows::process::CommandExt;
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ServiceInfo {
     pub names: String,
     pub codes: String,
