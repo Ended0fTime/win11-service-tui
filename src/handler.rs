@@ -192,18 +192,116 @@ impl App{
                 self.ui_state = UiMode::Execute;
             },
             KeyCode::Char('a') | KeyCode::Char('A') => {
-                self.service_info.sort_unstable();
-            },            
+                match self.sort_name_count {
+                    0 => {
+                        self.sort_service_name();
+                        self.sort_name_count += 1;
+                    }
+                    1 => {
+                        self.sort_desc_service_name();
+                        self.sort_name_count += 1;
+                    }
+                    2 => {
+                        self.sort_service_code();
+                        self.sort_name_count = 0;
+                    }
+                    _ => {
+                        eprintln!("Welp something went wrong on sorting algo order.");
+                    }
+                }
+            },    
             KeyCode::Char('s') | KeyCode::Char('S') => {
-                self.service_info.sort_unstable();
-            },            _ => {}
+                match self.sort_code_count {
+                    0 => {
+                        self.sort_service_code();
+                        self.sort_code_count += 1;
+                    }
+                    1 => {
+                        self.sort_desc_service_code();
+                        self.sort_code_count += 1;
+                    }
+                    2 => {
+                        self.sort_service_code();
+                        self.sort_code_count = 0;
+                    }
+                    _ => {
+                        eprintln!("Welp something went wrong on sorting algo order.");
+                    }
+                }
+            },            
+            KeyCode::Char('d') | KeyCode::Char('D') => {
+                match self.sort_start_type_count {
+                    0 => {
+                        self.sort_service_start_type();
+                        self.sort_start_type_count += 1;
+                    }
+                    1 => {
+                        self.sort_desc_service_start_type();
+                        self.sort_start_type_count += 1;
+                    }
+                    2 => {
+                        self.sort_service_code();
+                        self.sort_start_type_count = 0;
+                    }
+                    _ => {
+                        eprintln!("Welp something went wrong on sorting algo order.");
+                    }
+                }
+            },            
+            KeyCode::Char('z') | KeyCode::Char('Z') => {
+                match self.sort_status_count {
+                    0 => {
+                        self.sort_service_status();
+                        self.sort_status_count += 1;
+                    }
+                    1 => {
+                        self.sort_desc_service_status();
+                        self.sort_status_count += 1;
+                    }
+                    2 => {
+                        self.sort_service_code();
+                        self.sort_status_count = 0;
+                    }
+                    _ => {
+                        eprintln!("Welp something went wrong on sorting algo order.");
+                    }
+                }
+            },            
+            _ => {}
         }            
     }
 
-    fn sort_service_start_type(&mut self) {
-        self.service_info.sort_unstable();
+    fn sort_service_name(&mut self) {
+        self.service_info.sort_unstable_by_key(|serv| serv.names.to_lowercase());
+    }    
+
+    fn sort_desc_service_name(&mut self) {
+        self.service_info.sort_by(|a, b| b.names.cmp(&a.names));
+    }
+    
+    fn sort_service_code(&mut self) {
+        self.service_info.sort_unstable_by_key(|serv| serv.codes.to_lowercase());
+    }    
+
+    fn sort_desc_service_code(&mut self) {
+        self.service_info.sort_by(|a, b| b.codes.cmp(&a.codes));
     }
 
+    fn sort_service_start_type(&mut self) {
+        self.service_info.sort_unstable_by_key(|serv| serv.start_type.to_lowercase());
+    }   
+
+    fn sort_desc_service_start_type(&mut self) {
+        self.service_info.sort_by(|a, b| b.start_type.cmp(&a.start_type));
+    }
+
+    fn sort_service_status(&mut self) {
+        self.service_info.sort_unstable_by_key(|serv| serv.status.to_lowercase());
+    }    
+
+    fn sort_desc_service_status(&mut self) {
+        self.service_info.sort_by(|a, b| b.status.cmp(&a.status));
+    }
 
     fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> Result<()> {
         match self.ui_state {
